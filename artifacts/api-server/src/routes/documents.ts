@@ -16,6 +16,7 @@ import { chunkText, extractHeadingsAndCode } from "../lib/chunker";
 import { addChunks, removeChunks, getChunksForDocument } from "../lib/vectorStore";
 import { scrapeGithubRepo } from "../lib/github";
 import { parsePdfBuffer } from "../lib/pdfParser";
+import { scrapeWebPage } from "../lib/webScraper";
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
@@ -138,6 +139,40 @@ router.post(
     }
   }
 );
+
+/** URL web page scrape + ingest */
+router.post("/documents/url", async (req, res): Promise<void> => {
+  const { url, tags: rawTags } = req.body as { url?: string; tags?: string[] };
+  if (!url || typeof url !== "string") {
+    res.status(400).json({ error: "url is required" });
+    return;
+  }
+  const tags = Array.isArray(rawTags) ? rawTags : [];
+  try {
+    const page = await scrapeWebPage(url);
+    const chunks = chunkText(page.content);
+    const [doc] = await db
+      .insert(documentsTable)
+      .values({
+        title: page.title,
+        content: page.content,
+        type: "url",
+        tags,
+        chunkCount: chunks.length,
+        sourceUrl: page.sourceUrl,
+      })
+      .returning();
+    addChunks(doc.id, chunks);
+    await db.insert(activityTable).values({
+      type: "document_added",
+      description: `Web page "${page.title}" ingested (${chunks.length} chunks)`,
+    });
+    res.status(201).json(formatDoc(doc, chunks.length));
+  } catch (err) {
+    req.log.error({ err }, "URL scrape failed");
+    res.status(422).json({ error: "Failed to scrape URL" });
+  }
+});
 
 router.post("/documents/github", async (req, res): Promise<void> => {
   const parsed = IngestGithubRepoBody.safeParse(req.body);

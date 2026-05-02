@@ -1,0 +1,144 @@
+import { useEffect, useState, useCallback } from "react";
+import { useLocation } from "wouter";
+import { useListDocuments, useListChatSessions, useCreateChatSession } from "@workspace/api-client-react";
+import { getListChatSessionsQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "@/components/ui/command";
+import { Brain, FileText, MessageSquare, Plus, Settings, ActivitySquare, BookOpen, File, Github, Globe } from "lucide-react";
+
+const typeIcons: Record<string, React.ReactNode> = {
+  pdf: <File className="h-4 w-4 text-orange-400" />,
+  markdown: <FileText className="h-4 w-4 text-blue-400" />,
+  text: <FileText className="h-4 w-4 text-green-400" />,
+  github: <Github className="h-4 w-4 text-purple-400" />,
+  url: <Globe className="h-4 w-4 text-cyan-400" />,
+};
+
+interface CommandPaletteProps {
+  onSelectSession?: (id: number) => void;
+}
+
+export function CommandPalette({ onSelectSession }: CommandPaletteProps) {
+  const [open, setOpen] = useState(false);
+  const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
+
+  const { data: docs = [] } = useListDocuments();
+  const { data: sessions = [] } = useListChatSessions();
+  const createSession = useCreateChatSession();
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setOpen((o) => !o);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
+
+  const run = useCallback((fn: () => void) => {
+    setOpen(false);
+    setTimeout(fn, 80);
+  }, []);
+
+  const handleNewSession = async () => {
+    run(async () => {
+      const session = await createSession.mutateAsync({
+        data: { title: `Session ${new Date().toLocaleTimeString()}` },
+      });
+      queryClient.invalidateQueries({ queryKey: getListChatSessionsQueryKey() });
+      navigate("/");
+      onSelectSession?.(session.id);
+    });
+  };
+
+  return (
+    <CommandDialog open={open} onOpenChange={setOpen}>
+      <CommandInput placeholder="Search documents, sessions, navigate..." />
+      <CommandList>
+        <CommandEmpty>No results found.</CommandEmpty>
+
+        {/* Quick actions */}
+        <CommandGroup heading="Actions">
+          <CommandItem onSelect={() => run(() => { navigate("/"); handleNewSession(); })}>
+            <Plus className="h-4 w-4 mr-2 text-primary" />
+            New chat session
+          </CommandItem>
+          <CommandItem onSelect={() => run(() => navigate("/documents"))}>
+            <Plus className="h-4 w-4 mr-2 text-green-400" />
+            Upload document
+          </CommandItem>
+        </CommandGroup>
+
+        <CommandSeparator />
+
+        {/* Navigation */}
+        <CommandGroup heading="Navigate">
+          {[
+            { label: "Workspace", href: "/", icon: Brain },
+            { label: "Document Library", href: "/documents", icon: FileText },
+            { label: "Flashcard Decks", href: "/flashcards", icon: BookOpen },
+            { label: "Evaluation", href: "/eval", icon: ActivitySquare },
+            { label: "Settings", href: "/settings", icon: Settings },
+          ].map(({ label, href, icon: Icon }) => (
+            <CommandItem key={href} onSelect={() => run(() => navigate(href))}>
+              <Icon className="h-4 w-4 mr-2 text-muted-foreground" />
+              {label}
+            </CommandItem>
+          ))}
+        </CommandGroup>
+
+        {sessions.length > 0 && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading="Recent Sessions">
+              {sessions.slice(0, 5).map((s) => (
+                <CommandItem
+                  key={s.id}
+                  onSelect={() =>
+                    run(() => {
+                      navigate("/");
+                      onSelectSession?.(s.id);
+                    })
+                  }
+                >
+                  <MessageSquare className="h-4 w-4 mr-2 text-muted-foreground" />
+                  <span className="flex-1 truncate">{s.title}</span>
+                  <span className="text-xs text-muted-foreground ml-2">{s.messageCount} msgs</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        )}
+
+        {docs.length > 0 && (
+          <>
+            <CommandSeparator />
+            <CommandGroup heading="Documents">
+              {docs.slice(0, 8).map((doc) => (
+                <CommandItem
+                  key={doc.id}
+                  onSelect={() => run(() => navigate("/documents"))}
+                >
+                  {typeIcons[doc.type] ?? <FileText className="h-4 w-4 mr-2" />}
+                  <span className="ml-2 flex-1 truncate">{doc.title}</span>
+                  <span className="text-xs text-muted-foreground ml-2">{doc.chunkCount} chunks</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
+        )}
+      </CommandList>
+    </CommandDialog>
+  );
+}

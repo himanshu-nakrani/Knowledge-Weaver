@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Brain, FileText, Settings, ActivitySquare, Menu, MessageSquare, Plus, Trash2 } from "lucide-react";
+import { Brain, FileText, Settings, ActivitySquare, Menu, MessageSquare, Plus, Trash2, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useDeleteChatSession } from "@workspace/api-client-react";
 import { getListChatSessionsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { CommandPalette } from "@/components/CommandPalette";
 
 interface ChatSession {
   id: number;
@@ -26,6 +27,7 @@ interface AppLayoutProps {
 const navItems = [
   { href: "/", icon: Brain, label: "Workspace" },
   { href: "/documents", icon: FileText, label: "Library" },
+  { href: "/flashcards", icon: BookOpen, label: "Flashcards" },
   { href: "/eval", icon: ActivitySquare, label: "Evaluation" },
   { href: "/settings", icon: Settings, label: "Settings" },
 ];
@@ -43,12 +45,15 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
 
   const NavContent = () => (
     <div className="flex flex-col h-full border-r border-border" style={{ background: "hsl(220 15% 5%)" }}>
-      {/* Logo */}
+      {/* Logo + kbd hint */}
       <div className="flex items-center gap-2.5 px-4 py-4 border-b border-border">
         <div className="w-8 h-8 bg-primary/20 rounded-lg flex items-center justify-center shrink-0">
           <Brain className="h-4 w-4 text-primary" />
         </div>
-        <span className="font-bold text-base text-foreground tracking-tight hidden lg:block">MindForge</span>
+        <div className="hidden lg:flex flex-1 items-center justify-between min-w-0">
+          <span className="font-bold text-base text-foreground tracking-tight">MindForge</span>
+          <kbd className="text-[10px] text-muted-foreground border border-border rounded px-1 py-0.5 font-mono">⌘K</kbd>
+        </div>
       </div>
 
       {/* Nav */}
@@ -72,7 +77,7 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
         })}
       </nav>
 
-      {/* Sessions (only shown on workspace page) */}
+      {/* Sessions (workspace only) */}
       {sessions !== undefined && (
         <div className="flex-1 flex flex-col overflow-hidden border-t border-border mt-2">
           <div className="flex items-center justify-between px-3 py-2">
@@ -84,7 +89,7 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
               <button
                 onClick={onNewSession}
                 className="p-1 text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors"
-                title="New session"
+                title="New session (⌘K)"
               >
                 <Plus className="h-3.5 w-3.5" />
               </button>
@@ -119,6 +124,9 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
 
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden">
+      {/* Global Cmd+K command palette */}
+      <CommandPalette onSelectSession={onSelectSession} />
+
       {/* Desktop sidebar */}
       <div className="hidden md:flex h-full w-[60px] lg:w-[220px] shrink-0">
         <div className="w-full">
@@ -140,6 +148,7 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
         </Sheet>
         <Brain className="h-4 w-4 text-primary" />
         <span className="font-bold text-sm">MindForge</span>
+        <kbd className="ml-auto text-[10px] text-muted-foreground border border-border rounded px-1.5 py-0.5 font-mono">⌘K</kbd>
       </div>
 
       {/* Main content */}

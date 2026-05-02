@@ -1,13 +1,13 @@
 import { useState, useRef } from "react";
 import { useUploadDocument, useIngestGithubRepo } from "@workspace/api-client-react";
-import { X, Upload, Github, FileText, Loader2, FileUp, CheckCircle2 } from "lucide-react";
+import { X, Upload, Github, FileText, Loader2, FileUp, CheckCircle2, Globe } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface UploadModalProps {
   onClose: () => void;
 }
 
-type Tab = "text" | "pdf" | "github";
+type Tab = "text" | "pdf" | "url" | "github";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -28,6 +28,12 @@ export function UploadModal({ onClose }: UploadModalProps) {
   const [pdfUploading, setPdfUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // URL tab
+  const [webUrl, setWebUrl] = useState("");
+  const [webTags, setWebTags] = useState("");
+  const [urlLoading, setUrlLoading] = useState(false);
+  const [urlError, setUrlError] = useState("");
+
   // GitHub tab
   const [githubUrl, setGithubUrl] = useState("");
   const [githubTags, setGithubTags] = useState("");
@@ -35,7 +41,7 @@ export function UploadModal({ onClose }: UploadModalProps) {
   const uploadDoc = useUploadDocument();
   const ingestGithub = useIngestGithubRepo();
 
-  const isLoading = uploadDoc.isPending || ingestGithub.isPending || pdfUploading;
+  const isLoading = uploadDoc.isPending || ingestGithub.isPending || pdfUploading || urlLoading;
 
   const parseTags = (raw: string) =>
     raw.split(",").map((t) => t.trim()).filter(Boolean);
@@ -67,6 +73,30 @@ export function UploadModal({ onClose }: UploadModalProps) {
       console.error(err);
     } finally {
       setPdfUploading(false);
+    }
+  };
+
+  const handleUploadUrl = async () => {
+    const trimmed = webUrl.trim();
+    if (!trimmed) return;
+    setUrlError("");
+    setUrlLoading(true);
+    try {
+      const res = await fetch(`${BASE}/api/documents/url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: trimmed, tags: parseTags(webTags) }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed to scrape" }));
+        setUrlError(err.error ?? "Failed to scrape URL");
+        return;
+      }
+      onClose();
+    } catch {
+      setUrlError("Network error — check the URL and try again");
+    } finally {
+      setUrlLoading(false);
     }
   };
 
@@ -110,6 +140,7 @@ export function UploadModal({ onClose }: UploadModalProps) {
             {[
               { id: "text" as Tab, label: "Document", icon: FileText },
               { id: "pdf" as Tab, label: "PDF", icon: FileUp },
+              { id: "url" as Tab, label: "URL", icon: Globe },
               { id: "github" as Tab, label: "GitHub", icon: Github },
             ].map(({ id, label, icon: Icon }) => (
               <button
@@ -269,6 +300,43 @@ export function UploadModal({ onClose }: UploadModalProps) {
                 >
                   {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
                   {isLoading ? "Parsing PDF..." : "Upload PDF & Index"}
+                </button>
+              </>
+            )}
+
+            {tab === "url" && (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Web Page URL *</label>
+                  <input
+                    type="url"
+                    placeholder="https://example.com/article"
+                    value={webUrl}
+                    onChange={(e) => { setWebUrl(e.target.value); setUrlError(""); }}
+                    className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Scrapes article text, headings, and content from any public web page.
+                  </p>
+                  {urlError && <p className="text-xs text-destructive mt-1">{urlError}</p>}
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Tags</label>
+                  <input
+                    type="text"
+                    placeholder="article, web, reference..."
+                    value={webTags}
+                    onChange={(e) => setWebTags(e.target.value)}
+                    className="w-full px-3 py-2 bg-muted border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  />
+                </div>
+                <button
+                  onClick={handleUploadUrl}
+                  disabled={isLoading || !webUrl.trim()}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {urlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />}
+                  {urlLoading ? "Scraping page..." : "Scrape & Index"}
                 </button>
               </>
             )}

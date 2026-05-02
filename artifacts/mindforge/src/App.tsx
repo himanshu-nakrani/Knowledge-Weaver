@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import Documents from "@/pages/Documents";
+import Flashcards from "@/pages/Flashcards";
 import Eval from "@/pages/Eval";
 import Settings from "@/pages/Settings";
 
@@ -22,6 +23,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/documents" component={Documents} />
+      <Route path="/flashcards" component={Flashcards} />
       <Route path="/eval" component={Eval} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
@@ -43,4 +45,3 @@ function App() {
 }
 
 export default App;
-

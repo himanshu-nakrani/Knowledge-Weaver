@@ -5,7 +5,7 @@ import {
   useGenerateFlashcards,
   useGenerateMindmap,
 } from "@workspace/api-client-react";
-import { X, Loader2, ChevronDown, ChevronUp, Copy, Check } from "lucide-react";
+import { X, Loader2, ChevronDown, ChevronUp, Copy, Check, Save } from "lucide-react";
 import { motion } from "framer-motion";
 
 type ToolType = "summarize" | "actions" | "flashcards" | "mindmap";
@@ -27,6 +27,8 @@ interface Flashcard {
   question: string;
   answer: string;
 }
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function MermaidDiagram({ code }: { code: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -54,15 +56,12 @@ function MermaidDiagram({ code }: { code: string }) {
             clusterBkg: "#1e1b4b",
             titleColor: "#e2e8f0",
             edgeLabelBackground: "#1e293b",
-            attributeBackgroundColorEven: "#1e293b",
-            attributeBackgroundColorOdd: "#0f172a",
           },
         });
         const id = `mermaid-${Date.now()}`;
         const { svg } = await mermaid.render(id, code);
         if (!cancelled && ref.current) {
           ref.current.innerHTML = svg;
-          // Make SVG responsive
           const svgEl = ref.current.querySelector("svg");
           if (svgEl) {
             svgEl.removeAttribute("height");
@@ -86,9 +85,7 @@ function MermaidDiagram({ code }: { code: string }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs text-muted-foreground">
-          Interactive mind map — rendered with Mermaid
-        </span>
+        <span className="text-xs text-muted-foreground">Rendered with Mermaid · dark theme</span>
         <button
           onClick={handleCopy}
           className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground border border-border rounded-md transition-colors"
@@ -97,29 +94,17 @@ function MermaidDiagram({ code }: { code: string }) {
           {copied ? "Copied!" : "Copy code"}
         </button>
       </div>
-
       {error ? (
         <div>
-          <p className="text-xs text-yellow-400 mb-2">Could not render diagram — showing source:</p>
-          <pre className="bg-muted border border-border rounded-lg p-4 text-xs text-foreground/80 overflow-x-auto font-mono whitespace-pre-wrap">
-            {code}
-          </pre>
+          <p className="text-xs text-yellow-400 mb-2">Could not render — showing source:</p>
+          <pre className="bg-muted border border-border rounded-lg p-4 text-xs text-foreground/80 overflow-x-auto font-mono whitespace-pre-wrap">{code}</pre>
         </div>
       ) : (
-        <div
-          ref={ref}
-          className="bg-muted/30 border border-border rounded-xl p-4 min-h-[200px] flex items-center justify-center overflow-x-auto"
-        />
+        <div ref={ref} className="bg-muted/30 border border-border rounded-xl p-4 min-h-[200px] flex items-center justify-center overflow-x-auto" />
       )}
-
       <p className="text-xs text-muted-foreground mt-3">
-        Edit or share at{" "}
-        <a
-          href={`https://mermaid.live/edit#pako:${btoa(code)}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary hover:underline"
-        >
+        Edit at{" "}
+        <a href={`https://mermaid.live/edit#pako:${btoa(code)}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
           mermaid.live ↗
         </a>
       </p>
@@ -130,6 +115,8 @@ function MermaidDiagram({ code }: { code: string }) {
 export function ToolResultModal({ type, docId, onClose }: ToolResultModalProps) {
   const [flipped, setFlipped] = useState<Set<number>>(new Set());
   const [copied, setCopied] = useState(false);
+  const [savingDeck, setSavingDeck] = useState(false);
+  const [deckSaved, setDeckSaved] = useState(false);
 
   const summarize = useSummarizeDocument();
   const actions = useExtractActionItems();
@@ -144,8 +131,7 @@ export function ToolResultModal({ type, docId, onClose }: ToolResultModalProps) 
     else if (type === "mindmap") mindmap.mutate(data);
   }, []);
 
-  const isLoading =
-    summarize.isPending || actions.isPending || flashcards.isPending || mindmap.isPending;
+  const isLoading = summarize.isPending || actions.isPending || flashcards.isPending || mindmap.isPending;
 
   const toggleFlip = (i: number) => {
     setFlipped((prev) => {
@@ -160,6 +146,28 @@ export function ToolResultModal({ type, docId, onClose }: ToolResultModalProps) 
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSaveDeck = async () => {
+    if (!flashcards.data) return;
+    setSavingDeck(true);
+    try {
+      const cards = flashcards.data.flashcards as Flashcard[];
+      const docTitle = (flashcards.data as { documentTitle?: string }).documentTitle ?? `Document #${docId}`;
+      await fetch(`${BASE}/api/tools/flashcard-decks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentId: docId,
+          documentTitle: docTitle,
+          deckTitle: `${docTitle} — ${new Date().toLocaleDateString()}`,
+          flashcards: cards,
+        }),
+      });
+      setDeckSaved(true);
+    } finally {
+      setSavingDeck(false);
+    }
   };
 
   return (
@@ -177,21 +185,37 @@ export function ToolResultModal({ type, docId, onClose }: ToolResultModalProps) 
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="font-semibold text-foreground">{TITLES[type]}</h2>
-          <button
-            onClick={onClose}
-            className="p-1 text-muted-foreground hover:text-foreground rounded"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {type === "flashcards" && !isLoading && flashcards.data && (
+              <button
+                onClick={handleSaveDeck}
+                disabled={savingDeck || deckSaved}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  deckSaved
+                    ? "bg-green-500/20 text-green-400 border border-green-500/30"
+                    : "bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20"
+                } disabled:opacity-60`}
+              >
+                {deckSaved ? (
+                  <><Check className="h-3 w-3" /> Saved to Decks</>
+                ) : savingDeck ? (
+                  <><Loader2 className="h-3 w-3 animate-spin" /> Saving...</>
+                ) : (
+                  <><Save className="h-3 w-3" /> Save Deck</>
+                )}
+              </button>
+            )}
+            <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground rounded">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center h-48 gap-3">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              <p className="text-sm text-muted-foreground">
-                Generating {TITLES[type].toLowerCase()}...
-              </p>
+              <p className="text-sm text-muted-foreground">Generating {TITLES[type].toLowerCase()}...</p>
             </div>
           ) : (
             <>
@@ -206,37 +230,29 @@ export function ToolResultModal({ type, docId, onClose }: ToolResultModalProps) 
                       {copied ? "Copied!" : "Copy"}
                     </button>
                   </div>
-                  <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">
-                    {summarize.data.result}
-                  </p>
+                  <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{summarize.data.result}</p>
                 </div>
               )}
 
               {type === "actions" && actions.data && (
                 <div className="space-y-1.5">
-                  {actions.data.result
-                    .split("\n")
-                    .filter(Boolean)
-                    .map((line, i) => (
-                      <div
-                        key={i}
-                        className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-accent/30 transition-colors group"
-                      >
-                        <div className="w-5 h-5 rounded border border-border flex items-center justify-center shrink-0 mt-0.5 group-hover:border-primary/40">
-                          <span className="text-xs text-muted-foreground font-mono">{i + 1}</span>
-                        </div>
-                        <p className="text-sm text-foreground/90 flex-1">
-                          {line.replace(/^\d+\.\s*/, "").replace(/^[-•]\s*/, "")}
-                        </p>
+                  {actions.data.result.split("\n").filter(Boolean).map((line, i) => (
+                    <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-accent/30 transition-colors group">
+                      <div className="w-5 h-5 rounded border border-border flex items-center justify-center shrink-0 mt-0.5 group-hover:border-primary/40">
+                        <span className="text-xs text-muted-foreground font-mono">{i + 1}</span>
                       </div>
-                    ))}
+                      <p className="text-sm text-foreground/90 flex-1">
+                        {line.replace(/^\d+\.\s*/, "").replace(/^[-•]\s*/, "")}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               )}
 
               {type === "flashcards" && flashcards.data && (
                 <div>
                   <p className="text-xs text-muted-foreground mb-3">
-                    {(flashcards.data.flashcards as Flashcard[]).length} cards · Click to flip
+                    {(flashcards.data.flashcards as Flashcard[]).length} cards · Click to flip · Save deck to review later
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {(flashcards.data.flashcards as Flashcard[]).map((card, i) => (
@@ -245,39 +261,24 @@ export function ToolResultModal({ type, docId, onClose }: ToolResultModalProps) 
                         onClick={() => toggleFlip(i)}
                         whileTap={{ scale: 0.98 }}
                         className={`cursor-pointer border rounded-xl p-4 transition-all min-h-[110px] flex flex-col ${
-                          flipped.has(i)
-                            ? "border-green-500/40 bg-green-500/5"
-                            : "border-border bg-muted hover:border-primary/30"
+                          flipped.has(i) ? "border-green-500/40 bg-green-500/5" : "border-border bg-muted hover:border-primary/30"
                         }`}
                       >
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-xs font-medium text-primary">Card {i + 1}</span>
-                          {flipped.has(i) ? (
-                            <ChevronUp className="h-3 w-3 text-muted-foreground" />
-                          ) : (
-                            <ChevronDown className="h-3 w-3 text-muted-foreground" />
-                          )}
+                          {flipped.has(i) ? <ChevronUp className="h-3 w-3 text-muted-foreground" /> : <ChevronDown className="h-3 w-3 text-muted-foreground" />}
                         </div>
-                        <p
-                          className={`text-sm leading-relaxed flex-1 ${
-                            flipped.has(i) ? "text-green-400" : "text-foreground font-medium"
-                          }`}
-                        >
+                        <p className={`text-sm leading-relaxed flex-1 ${flipped.has(i) ? "text-green-400" : "text-foreground font-medium"}`}>
                           {flipped.has(i) ? card.answer : card.question}
                         </p>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          {flipped.has(i) ? "Answer ✓" : "Tap to reveal"}
-                        </p>
+                        <p className="text-xs text-muted-foreground mt-2">{flipped.has(i) ? "Answer ✓" : "Tap to reveal"}</p>
                       </motion.div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {type === "mindmap" && mindmap.data?.result && (
-                <MermaidDiagram code={mindmap.data.result} />
-              )}
-
+              {type === "mindmap" && mindmap.data?.result && <MermaidDiagram code={mindmap.data.result} />}
               {type === "mindmap" && !mindmap.data && !mindmap.isPending && (
                 <p className="text-sm text-muted-foreground">No mind map generated.</p>
               )}
