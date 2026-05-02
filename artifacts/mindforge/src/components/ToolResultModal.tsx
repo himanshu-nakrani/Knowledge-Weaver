@@ -5,7 +5,7 @@ import {
   useGenerateFlashcards,
   useGenerateMindmap,
 } from "@workspace/api-client-react";
-import { X, Loader2, ChevronDown, ChevronUp, Copy, Check, Save } from "lucide-react";
+import { X, Loader2, ChevronDown, ChevronUp, Copy, Check, Save, Download } from "lucide-react";
 import { motion } from "framer-motion";
 
 type ToolType = "summarize" | "actions" | "flashcards" | "mindmap";
@@ -29,6 +29,38 @@ interface Flashcard {
 }
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function downloadText(filename: string, content: string, mime = "text/plain") {
+  const blob = new Blob([content], { type: mime });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function exportSummaryMd(text: string) {
+  downloadText("summary.md", `# Summary\n\n${text}`);
+}
+
+function exportActionsMd(text: string) {
+  const lines = text.split("\n").filter(Boolean)
+    .map((l, i) => `${i + 1}. ${l.replace(/^\d+\.\s*/, "").replace(/^[-•]\s*/, "")}`);
+  downloadText("action-items.md", `# Action Items\n\n${lines.join("\n")}`);
+}
+
+function exportFlashcardsCsv(cards: Flashcard[]) {
+  const header = "Question,Answer";
+  const rows = cards.map((c) => `"${c.question.replace(/"/g, '""')}","${c.answer.replace(/"/g, '""')}"`);
+  downloadText("flashcards.csv", [header, ...rows].join("\n"), "text/csv");
+}
+
+function exportMindmapSvg() {
+  const svg = document.querySelector(".mermaid-output svg");
+  if (!svg) return;
+  const svgStr = new XMLSerializer().serializeToString(svg);
+  downloadText("mindmap.svg", svgStr, "image/svg+xml");
+}
 
 function MermaidDiagram({ code }: { code: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -100,7 +132,7 @@ function MermaidDiagram({ code }: { code: string }) {
           <pre className="bg-muted border border-border rounded-lg p-4 text-xs text-foreground/80 overflow-x-auto font-mono whitespace-pre-wrap">{code}</pre>
         </div>
       ) : (
-        <div ref={ref} className="bg-muted/30 border border-border rounded-xl p-4 min-h-[200px] flex items-center justify-center overflow-x-auto" />
+        <div ref={ref} className="mermaid-output bg-muted/30 border border-border rounded-xl p-4 min-h-[200px] flex items-center justify-center overflow-x-auto" />
       )}
       <p className="text-xs text-muted-foreground mt-3">
         Edit at{" "}
@@ -186,23 +218,55 @@ export function ToolResultModal({ type, docId, onClose }: ToolResultModalProps) 
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="font-semibold text-foreground">{TITLES[type]}</h2>
           <div className="flex items-center gap-2">
-            {type === "flashcards" && !isLoading && flashcards.data && (
+            {type === "summarize" && !isLoading && summarize.data && (
               <button
-                onClick={handleSaveDeck}
-                disabled={savingDeck || deckSaved}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  deckSaved
-                    ? "bg-green-500/20 text-green-400 border border-green-500/30"
-                    : "bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20"
-                } disabled:opacity-60`}
+                onClick={() => exportSummaryMd(summarize.data!.result)}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg transition-colors"
               >
-                {deckSaved ? (
-                  <><Check className="h-3 w-3" /> Saved to Decks</>
-                ) : savingDeck ? (
-                  <><Loader2 className="h-3 w-3 animate-spin" /> Saving...</>
-                ) : (
-                  <><Save className="h-3 w-3" /> Save Deck</>
-                )}
+                <Download className="h-3 w-3" /> .md
+              </button>
+            )}
+            {type === "actions" && !isLoading && actions.data && (
+              <button
+                onClick={() => exportActionsMd(actions.data!.result)}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg transition-colors"
+              >
+                <Download className="h-3 w-3" /> .md
+              </button>
+            )}
+            {type === "flashcards" && !isLoading && flashcards.data && (
+              <>
+                <button
+                  onClick={() => exportFlashcardsCsv(flashcards.data!.flashcards as Flashcard[])}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg transition-colors"
+                >
+                  <Download className="h-3 w-3" /> .csv
+                </button>
+                <button
+                  onClick={handleSaveDeck}
+                  disabled={savingDeck || deckSaved}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    deckSaved
+                      ? "bg-green-500/20 text-green-400 border border-green-500/30"
+                      : "bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20"
+                  } disabled:opacity-60`}
+                >
+                  {deckSaved ? (
+                    <><Check className="h-3 w-3" /> Saved to Decks</>
+                  ) : savingDeck ? (
+                    <><Loader2 className="h-3 w-3 animate-spin" /> Saving...</>
+                  ) : (
+                    <><Save className="h-3 w-3" /> Save Deck</>
+                  )}
+                </button>
+              </>
+            )}
+            {type === "mindmap" && !isLoading && mindmap.data?.result && (
+              <button
+                onClick={exportMindmapSvg}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg transition-colors"
+              >
+                <Download className="h-3 w-3" /> .svg
               </button>
             )}
             <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground rounded">

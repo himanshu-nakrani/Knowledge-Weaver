@@ -12,7 +12,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import { Brain, FileText, MessageSquare, Plus, Settings, ActivitySquare, BookOpen, File, Github, Globe } from "lucide-react";
+import { Brain, FileText, MessageSquare, Plus, Settings, ActivitySquare, BookOpen, File, Github, Globe, StickyNote } from "lucide-react";
 
 const typeIcons: Record<string, React.ReactNode> = {
   pdf: <File className="h-4 w-4 text-orange-400" />,
@@ -24,9 +24,10 @@ const typeIcons: Record<string, React.ReactNode> = {
 
 interface CommandPaletteProps {
   onSelectSession?: (id: number) => void;
+  onQuickNote?: () => void;
 }
 
-export function CommandPalette({ onSelectSession }: CommandPaletteProps) {
+export function CommandPalette({ onSelectSession, onQuickNote }: CommandPaletteProps) {
   const [open, setOpen] = useState(false);
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
@@ -73,6 +74,10 @@ export function CommandPalette({ onSelectSession }: CommandPaletteProps) {
           <CommandItem onSelect={() => run(() => { navigate("/"); handleNewSession(); })}>
             <Plus className="h-4 w-4 mr-2 text-primary" />
             New chat session
+          </CommandItem>
+          <CommandItem onSelect={() => run(() => onQuickNote?.())}>
+            <StickyNote className="h-4 w-4 mr-2 text-amber-400" />
+            Quick note <span className="ml-auto text-xs text-muted-foreground font-mono">⌘N</span>
           </CommandItem>
           <CommandItem onSelect={() => run(() => navigate("/documents"))}>
             <Plus className="h-4 w-4 mr-2 text-green-400" />

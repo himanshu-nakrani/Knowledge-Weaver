@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { useListDocuments, useDeleteDocument, useUpdateDocument } from "@workspace/api-client-react";
+import { useListDocuments, useDeleteDocument } from "@workspace/api-client-react";
 import { getListDocumentsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { UploadModal } from "@/components/UploadModal";
-import { Search, Plus, Trash2, Tag, FileText, File, Github, ExternalLink } from "lucide-react";
+import { DocumentReader } from "@/components/DocumentReader";
+import { ToolResultModal } from "@/components/ToolResultModal";
+import { Search, Plus, Trash2, FileText, File, Github, Globe, ExternalLink, BookOpen } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const typeIcons: Record<string, React.ReactNode> = {
@@ -12,6 +14,7 @@ const typeIcons: Record<string, React.ReactNode> = {
   markdown: <FileText className="h-4 w-4 text-blue-400" />,
   text: <FileText className="h-4 w-4 text-green-400" />,
   github: <Github className="h-4 w-4 text-purple-400" />,
+  url: <Globe className="h-4 w-4 text-cyan-400" />,
 };
 
 const typeColors: Record<string, string> = {
@@ -19,16 +22,23 @@ const typeColors: Record<string, string> = {
   markdown: "border-blue-400/20 bg-blue-400/5",
   text: "border-green-400/20 bg-green-400/5",
   github: "border-purple-400/20 bg-purple-400/5",
+  url: "border-cyan-400/20 bg-cyan-400/5",
 };
+
+type ToolType = "summarize" | "actions" | "flashcards" | "mindmap";
 
 export default function Documents() {
   const [search, setSearch] = useState("");
   const [filterTag, setFilterTag] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
+  const [readerDoc, setReaderDoc] = useState<(typeof docs)[0] | null>(null);
+  const [toolState, setToolState] = useState<{ type: ToolType; docId: number } | null>(null);
   const queryClient = useQueryClient();
 
   const { data: docs = [], isLoading } = useListDocuments({ search: search || undefined, tag: filterTag || undefined });
   const deleteDoc = useDeleteDocument();
+  // readerDoc needs to resolve after docs loads
+  const resolvedReader = readerDoc ? (docs.find((d) => d.id === readerDoc.id) ?? readerDoc) : null;
 
   const allTags = Array.from(new Set(docs.flatMap((d) => d.tags)));
 
@@ -118,19 +128,29 @@ export default function Documents() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className={`group relative border rounded-xl p-4 bg-card hover:border-primary/30 transition-all duration-200 cursor-default ${typeColors[doc.type] ?? "border-border"}`}
+                    onClick={() => setReaderDoc(doc)}
+                    className={`group relative border rounded-xl p-4 bg-card hover:border-primary/30 transition-all duration-200 cursor-pointer ${typeColors[doc.type] ?? "border-border"}`}
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
                         {typeIcons[doc.type]}
                         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{doc.type}</span>
                       </div>
-                      <button
-                        onClick={() => handleDelete(doc.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-all duration-200 rounded"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setToolState({ type: "flashcards", docId: doc.id }); }}
+                          title="Generate flashcards"
+                          className="p-1 text-muted-foreground hover:text-primary rounded transition-colors"
+                        >
+                          <BookOpen className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
+                          className="p-1 text-muted-foreground hover:text-destructive rounded transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
 
                     <h3 className="font-semibold text-foreground text-sm mb-1 line-clamp-2">{doc.title}</h3>
@@ -171,6 +191,22 @@ export default function Documents() {
 
       {showUpload && (
         <UploadModal onClose={() => setShowUpload(false)} />
+      )}
+
+      {resolvedReader && (
+        <DocumentReader
+          doc={resolvedReader}
+          onClose={() => setReaderDoc(null)}
+          onTool={(type, docId) => setToolState({ type, docId })}
+        />
+      )}
+
+      {toolState && (
+        <ToolResultModal
+          type={toolState.type}
+          docId={toolState.docId}
+          onClose={() => setToolState(null)}
+        />
       )}
     </AppLayout>
   );

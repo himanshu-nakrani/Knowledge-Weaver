@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Brain, FileText, Settings, ActivitySquare, Menu, MessageSquare, Plus, Trash2, BookOpen } from "lucide-react";
+import { Brain, FileText, Settings, ActivitySquare, Menu, MessageSquare, Plus, Trash2, BookOpen, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useDeleteChatSession } from "@workspace/api-client-react";
 import { getListChatSessionsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CommandPalette } from "@/components/CommandPalette";
+import { QuickNoteModal } from "@/components/QuickNoteModal";
 
 interface ChatSession {
   id: number;
@@ -36,6 +37,18 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
   const [location] = useLocation();
   const queryClient = useQueryClient();
   const deleteSession = useDeleteChatSession();
+  const [showNote, setShowNote] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "n") {
+        e.preventDefault();
+        setShowNote(true);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
 
   const handleDeleteSession = async (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
@@ -45,14 +58,17 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
 
   const NavContent = () => (
     <div className="flex flex-col h-full border-r border-border" style={{ background: "hsl(220 15% 5%)" }}>
-      {/* Logo + kbd hint */}
+      {/* Logo + kbd hints */}
       <div className="flex items-center gap-2.5 px-4 py-4 border-b border-border">
         <div className="w-8 h-8 bg-primary/20 rounded-lg flex items-center justify-center shrink-0">
           <Brain className="h-4 w-4 text-primary" />
         </div>
         <div className="hidden lg:flex flex-1 items-center justify-between min-w-0">
           <span className="font-bold text-base text-foreground tracking-tight">MindForge</span>
-          <kbd className="text-[10px] text-muted-foreground border border-border rounded px-1 py-0.5 font-mono">⌘K</kbd>
+          <div className="flex items-center gap-1">
+            <kbd className="text-[10px] text-muted-foreground border border-border rounded px-1 py-0.5 font-mono">⌘K</kbd>
+            <kbd className="text-[10px] text-muted-foreground border border-border rounded px-1 py-0.5 font-mono">⌘N</kbd>
+          </div>
         </div>
       </div>
 
@@ -75,6 +91,15 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
             </Link>
           );
         })}
+
+        {/* Quick note button */}
+        <button
+          onClick={() => setShowNote(true)}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all duration-150 text-muted-foreground hover:bg-amber-400/10 hover:text-amber-400"
+        >
+          <StickyNote className="h-4 w-4 shrink-0" />
+          <span className="hidden lg:block text-sm font-medium">Quick Note</span>
+        </button>
       </nav>
 
       {/* Sessions (workspace only) */}
@@ -125,7 +150,10 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden">
       {/* Global Cmd+K command palette */}
-      <CommandPalette onSelectSession={onSelectSession} />
+      <CommandPalette onSelectSession={onSelectSession} onQuickNote={() => setShowNote(true)} />
+
+      {/* Quick Note modal */}
+      {showNote && <QuickNoteModal onClose={() => setShowNote(false)} />}
 
       {/* Desktop sidebar */}
       <div className="hidden md:flex h-full w-[60px] lg:w-[220px] shrink-0">
@@ -148,7 +176,12 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
         </Sheet>
         <Brain className="h-4 w-4 text-primary" />
         <span className="font-bold text-sm">MindForge</span>
-        <kbd className="ml-auto text-[10px] text-muted-foreground border border-border rounded px-1.5 py-0.5 font-mono">⌘K</kbd>
+        <div className="ml-auto flex items-center gap-1">
+          <kbd className="text-[10px] text-muted-foreground border border-border rounded px-1.5 py-0.5 font-mono">⌘K</kbd>
+          <button onClick={() => setShowNote(true)} className="p-1.5 text-muted-foreground hover:text-amber-400 transition-colors rounded">
+            <StickyNote className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* Main content */}
