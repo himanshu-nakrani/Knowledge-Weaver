@@ -1,13 +1,17 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Brain, FileText, Settings, ActivitySquare, Menu, MessageSquare, Plus, Trash2, BookOpen, StickyNote } from "lucide-react";
+import {
+  Brain, FileText, Settings, ActivitySquare, Menu,
+  MessageSquare, Plus, Trash2, BookOpen, StickyNote,
+  LogIn, LogOut, User, Trash,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { useDeleteChatSession } from "@workspace/api-client-react";
-import { getListChatSessionsQueryKey } from "@workspace/api-client-react";
+import { useDeleteChatSession, getListChatSessionsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CommandPalette } from "@/components/CommandPalette";
 import { QuickNoteModal } from "@/components/QuickNoteModal";
+import { useAuth } from "@workspace/replit-auth-web";
 
 interface ChatSession {
   id: number;
@@ -38,6 +42,7 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
   const queryClient = useQueryClient();
   const deleteSession = useDeleteChatSession();
   const [showNote, setShowNote] = useState(false);
+  const { user, isLoading: authLoading, login, logout } = useAuth();
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -56,9 +61,13 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
     queryClient.invalidateQueries({ queryKey: getListChatSessionsQueryKey() });
   };
 
+  const userDisplayName = user
+    ? (user.firstName ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ""}`.trim() : user.email ?? "User")
+    : null;
+
   const NavContent = () => (
     <div className="flex flex-col h-full border-r border-border" style={{ background: "hsl(220 15% 5%)" }}>
-      {/* Logo + kbd hints */}
+      {/* Logo */}
       <div className="flex items-center gap-2.5 px-4 py-4 border-b border-border">
         <div className="w-8 h-8 bg-primary/20 rounded-lg flex items-center justify-center shrink-0">
           <Brain className="h-4 w-4 text-primary" />
@@ -92,7 +101,7 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
           );
         })}
 
-        {/* Quick note button */}
+        {/* Quick note */}
         <button
           onClick={() => setShowNote(true)}
           className="w-full flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all duration-150 text-muted-foreground hover:bg-amber-400/10 hover:text-amber-400"
@@ -100,9 +109,23 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
           <StickyNote className="h-4 w-4 shrink-0" />
           <span className="hidden lg:block text-sm font-medium">Quick Note</span>
         </button>
+
+        {/* Trash */}
+        <Link href="/trash">
+          <div
+            className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all duration-150 ${
+              location === "/trash"
+                ? "bg-destructive/10 text-destructive"
+                : "text-muted-foreground hover:bg-destructive/10 hover:text-destructive/80"
+            }`}
+          >
+            <Trash className="h-4 w-4 shrink-0" />
+            <span className="hidden lg:block text-sm font-medium">Trash</span>
+          </div>
+        </Link>
       </nav>
 
-      {/* Sessions (workspace only) */}
+      {/* Sessions */}
       {sessions !== undefined && (
         <div className="flex-1 flex flex-col overflow-hidden border-t border-border mt-2">
           <div className="flex items-center justify-between px-3 py-2">
@@ -144,15 +167,47 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
           </div>
         </div>
       )}
+
+      {/* User profile / Login */}
+      <div className="border-t border-border p-3">
+        {authLoading ? (
+          <div className="h-8 bg-muted/30 rounded-lg animate-pulse" />
+        ) : user ? (
+          <div className="flex items-center gap-2 group">
+            <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center shrink-0 overflow-hidden">
+              {user.profileImageUrl ? (
+                <img src={user.profileImageUrl} alt="avatar" className="w-full h-full object-cover" />
+              ) : (
+                <User className="h-3.5 w-3.5 text-primary" />
+              )}
+            </div>
+            <div className="hidden lg:flex flex-1 items-center justify-between min-w-0">
+              <span className="text-xs text-foreground truncate">{userDisplayName}</span>
+              <button
+                onClick={logout}
+                title="Sign out"
+                className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors opacity-0 group-hover:opacity-100"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={login}
+            className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary transition-all duration-150"
+          >
+            <LogIn className="h-4 w-4 shrink-0" />
+            <span className="hidden lg:block text-xs font-medium">Sign in with Replit</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden">
-      {/* Global Cmd+K command palette */}
       <CommandPalette onSelectSession={onSelectSession} onQuickNote={() => setShowNote(true)} />
-
-      {/* Quick Note modal */}
       {showNote && <QuickNoteModal onClose={() => setShowNote(false)} />}
 
       {/* Desktop sidebar */}
@@ -181,6 +236,11 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
           <button onClick={() => setShowNote(true)} className="p-1.5 text-muted-foreground hover:text-amber-400 transition-colors rounded">
             <StickyNote className="h-4 w-4" />
           </button>
+          {!authLoading && !user && (
+            <button onClick={login} className="p-1.5 text-muted-foreground hover:text-primary transition-colors rounded">
+              <LogIn className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
 

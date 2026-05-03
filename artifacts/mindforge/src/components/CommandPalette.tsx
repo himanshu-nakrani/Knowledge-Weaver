@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useLocation } from "wouter";
-import { useListDocuments, useListChatSessions, useCreateChatSession } from "@workspace/api-client-react";
-import { getListChatSessionsQueryKey } from "@workspace/api-client-react";
+import { useListDocuments, useListChatSessions, useCreateChatSession, getListChatSessionsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   CommandDialog,
@@ -12,7 +11,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import { Brain, FileText, MessageSquare, Plus, Settings, ActivitySquare, BookOpen, File, Github, Globe, StickyNote } from "lucide-react";
+import { Brain, FileText, MessageSquare, Plus, Settings, ActivitySquare, BookOpen, File, Github, Globe, StickyNote, Trash } from "lucide-react";
 
 const typeIcons: Record<string, React.ReactNode> = {
   pdf: <File className="h-4 w-4 text-orange-400" />,
@@ -95,6 +94,7 @@ export function CommandPalette({ onSelectSession, onQuickNote }: CommandPaletteP
             { label: "Flashcard Decks", href: "/flashcards", icon: BookOpen },
             { label: "Evaluation", href: "/eval", icon: ActivitySquare },
             { label: "Settings", href: "/settings", icon: Settings },
+            { label: "Trash", href: "/trash", icon: Trash },
           ].map(({ label, href, icon: Icon }) => (
             <CommandItem key={href} onSelect={() => run(() => navigate(href))}>
               <Icon className="h-4 w-4 mr-2 text-muted-foreground" />

@@ -1,7 +1,28 @@
+import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Key, Brain, Globe, Info } from "lucide-react";
+import { Key, Brain, Globe, Info, Download, Loader2 } from "lucide-react";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function Settings() {
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await fetch(`${BASE}/api/export`, { credentials: "include" });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `mindforge-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="h-full flex flex-col p-6 overflow-y-auto">
@@ -11,6 +32,7 @@ export default function Settings() {
         </div>
 
         <div className="space-y-4 max-w-2xl">
+          {/* API Keys */}
           <div className="bg-card border border-border rounded-xl p-5">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-primary/10 rounded-lg">
@@ -51,6 +73,7 @@ export default function Settings() {
             </div>
           </div>
 
+          {/* Model config */}
           <div className="bg-card border border-border rounded-xl p-5">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-primary/10 rounded-lg">
@@ -93,6 +116,31 @@ export default function Settings() {
             </div>
           </div>
 
+          {/* Data Export */}
+          <div className="bg-card border border-border rounded-xl p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Download className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-foreground">Data Export</h2>
+                <p className="text-muted-foreground text-xs">Download all your knowledge base data</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Export all your documents, chat sessions, and flashcard decks as a single JSON file. Useful for backups or migrating to another instance.
+            </p>
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/30 text-primary rounded-lg text-sm font-medium hover:bg-primary/20 transition-colors disabled:opacity-50"
+            >
+              {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {exporting ? "Exporting..." : "Export all data"}
+            </button>
+          </div>
+
+          {/* About */}
           <div className="bg-card border border-border rounded-xl p-5">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2 bg-primary/10 rounded-lg">

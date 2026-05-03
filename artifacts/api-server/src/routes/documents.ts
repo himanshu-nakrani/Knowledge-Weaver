@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, ilike, or, sql } from "drizzle-orm";
-import { db, documentsTable, activityTable } from "@workspace/db";
+import { eq, ilike, or, sql, isNull, isNotNull } from "drizzle-orm";
+import { db, documentsTable, activityTable, chatSessionsTable, chatMessagesTable, flashcardDecksTable } from "@workspace/db";
 import multer from "multer";
 import {
   ListDocumentsQueryParams,
@@ -27,11 +27,14 @@ function formatDoc(doc: typeof documentsTable.$inferSelect, chunkCount: number) 
     tags: doc.tags ?? [],
     chunkCount,
     sourceUrl: doc.sourceUrl ?? null,
+    pinned: doc.pinned ?? false,
+    deletedAt: doc.deletedAt ? doc.deletedAt.toISOString() : null,
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
   };
 }
 
+// List active (non-deleted) documents
 router.get("/documents", async (req, res): Promise<void> => {
   const params = ListDocumentsQueryParams.safeParse(req.query);
   if (!params.success) {
@@ -42,7 +45,8 @@ router.get("/documents", async (req, res): Promise<void> => {
   const docs = await db
     .select()
     .from(documentsTable)
-    .orderBy(sql`${documentsTable.createdAt} desc`);
+    .where(isNull(documentsTable.deletedAt))
+    .orderBy(sql`${documentsTable.pinned} desc, ${documentsTable.createdAt} desc`);
 
   let result = docs;
   if (params.data.search) {
@@ -62,6 +66,16 @@ router.get("/documents", async (req, res): Promise<void> => {
   res.json(result.map((d) => formatDoc(d, getChunksForDocument(d.id).length)));
 });
 
+// List trash (soft-deleted documents)
+router.get("/documents/trash", async (_req, res): Promise<void> => {
+  const docs = await db
+    .select()
+    .from(documentsTable)
+    .where(isNotNull(documentsTable.deletedAt))
+    .orderBy(sql`${documentsTable.deletedAt} desc`);
+  res.json(docs.map((d) => formatDoc(d, getChunksForDocument(d.id).length)));
+});
+
 router.post("/documents", async (req, res): Promise<void> => {
   const parsed = UploadDocumentBody.safeParse(req.body);
   if (!parsed.success) {
@@ -70,8 +84,7 @@ router.post("/documents", async (req, res): Promise<void> => {
   }
 
   const { title, content, type, tags } = parsed.data;
-  const processedContent =
-    type === "markdown" ? extractHeadingsAndCode(content) : content;
+  const processedContent = type === "markdown" ? extractHeadingsAndCode(content) : content;
   const chunks = chunkText(processedContent);
 
   const [doc] = await db
@@ -90,77 +103,50 @@ router.post("/documents", async (req, res): Promise<void> => {
 });
 
 /** PDF upload via multipart/form-data */
-router.post(
-  "/documents/pdf",
-  upload.single("file"),
-  async (req, res): Promise<void> => {
-    if (!req.file) {
-      res.status(400).json({ error: "No file uploaded" });
-      return;
-    }
-    if (req.file.mimetype !== "application/pdf") {
-      res.status(400).json({ error: "File must be a PDF" });
-      return;
-    }
+router.post("/documents/pdf", upload.single("file"), async (req, res): Promise<void> => {
+  if (!req.file) { res.status(400).json({ error: "No file uploaded" }); return; }
+  if (req.file.mimetype !== "application/pdf") { res.status(400).json({ error: "File must be a PDF" }); return; }
 
-    const rawTags = req.body.tags ?? "";
-    const tags = typeof rawTags === "string"
-      ? rawTags.split(",").map((t: string) => t.trim()).filter(Boolean)
-      : [];
+  const rawTags = req.body.tags ?? "";
+  const tags = typeof rawTags === "string"
+    ? rawTags.split(",").map((t: string) => t.trim()).filter(Boolean)
+    : [];
 
-    try {
-      const text = await parsePdfBuffer(req.file.buffer);
-      const title = req.body.title?.trim() || req.file.originalname.replace(/\.pdf$/i, "");
-      const chunks = chunkText(text);
+  try {
+    const text = await parsePdfBuffer(req.file.buffer);
+    const title = req.body.title?.trim() || req.file.originalname.replace(/\.pdf$/i, "");
+    const chunks = chunkText(text);
 
-      const [doc] = await db
-        .insert(documentsTable)
-        .values({
-          title,
-          content: text,
-          type: "pdf",
-          tags,
-          chunkCount: chunks.length,
-          sourceUrl: null,
-        })
-        .returning();
+    const [doc] = await db
+      .insert(documentsTable)
+      .values({ title, content: text, type: "pdf", tags, chunkCount: chunks.length, sourceUrl: null })
+      .returning();
 
-      addChunks(doc.id, chunks);
+    addChunks(doc.id, chunks);
 
-      await db.insert(activityTable).values({
-        type: "document_added",
-        description: `PDF "${title}" uploaded (${chunks.length} chunks)`,
-      });
+    await db.insert(activityTable).values({
+      type: "document_added",
+      description: `PDF "${title}" uploaded (${chunks.length} chunks)`,
+    });
 
-      res.status(201).json(formatDoc(doc, chunks.length));
-    } catch (err) {
-      req.log.error({ err }, "PDF parse failed");
-      res.status(422).json({ error: "Failed to parse PDF" });
-    }
+    res.status(201).json(formatDoc(doc, chunks.length));
+  } catch (err) {
+    req.log.error({ err }, "PDF parse failed");
+    res.status(422).json({ error: "Failed to parse PDF" });
   }
-);
+});
 
 /** URL web page scrape + ingest */
 router.post("/documents/url", async (req, res): Promise<void> => {
   const { url, tags: rawTags } = req.body as { url?: string; tags?: string[] };
-  if (!url || typeof url !== "string") {
-    res.status(400).json({ error: "url is required" });
-    return;
-  }
+  if (!url || typeof url !== "string") { res.status(400).json({ error: "url is required" }); return; }
   const tags = Array.isArray(rawTags) ? rawTags : [];
   try {
     const page = await scrapeWebPage(url);
     const chunks = chunkText(page.content);
     const [doc] = await db
       .insert(documentsTable)
-      .values({
-        title: page.title,
-        content: page.content,
-        type: "url",
-        tags,
-        chunkCount: chunks.length,
-        sourceUrl: page.sourceUrl,
-      })
+      .values({ title: page.title, content: page.content, type: "url", tags, chunkCount: chunks.length, sourceUrl: page.sourceUrl })
       .returning();
     addChunks(doc.id, chunks);
     await db.insert(activityTable).values({
@@ -176,10 +162,7 @@ router.post("/documents/url", async (req, res): Promise<void> => {
 
 router.post("/documents/github", async (req, res): Promise<void> => {
   const parsed = IngestGithubRepoBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const { url, tags } = parsed.data;
   const githubContent = await scrapeGithubRepo(url);
@@ -187,14 +170,7 @@ router.post("/documents/github", async (req, res): Promise<void> => {
 
   const [doc] = await db
     .insert(documentsTable)
-    .values({
-      title: githubContent.title,
-      content: githubContent.content,
-      type: "github",
-      tags: tags ?? [],
-      chunkCount: chunks.length,
-      sourceUrl: githubContent.sourceUrl,
-    })
+    .values({ title: githubContent.title, content: githubContent.content, type: "github", tags: tags ?? [], chunkCount: chunks.length, sourceUrl: githubContent.sourceUrl })
     .returning();
 
   addChunks(doc.id, chunks);
@@ -209,32 +185,17 @@ router.post("/documents/github", async (req, res): Promise<void> => {
 
 router.get("/documents/:id", async (req, res): Promise<void> => {
   const params = GetDocumentParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const [doc] = await db
-    .select()
-    .from(documentsTable)
-    .where(eq(documentsTable.id, params.data.id));
-  if (!doc) {
-    res.status(404).json({ error: "Document not found" });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [doc] = await db.select().from(documentsTable).where(eq(documentsTable.id, params.data.id));
+  if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
   res.json(formatDoc(doc, getChunksForDocument(doc.id).length));
 });
 
 router.patch("/documents/:id", async (req, res): Promise<void> => {
   const params = UpdateDocumentParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateDocumentBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const updateData: Record<string, unknown> = {};
   if (parsed.data.title != null) updateData.title = parsed.data.title;
@@ -245,51 +206,100 @@ router.patch("/documents/:id", async (req, res): Promise<void> => {
     .set(updateData)
     .where(eq(documentsTable.id, params.data.id))
     .returning();
-  if (!doc) {
-    res.status(404).json({ error: "Document not found" });
-    return;
-  }
+  if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
   res.json(formatDoc(doc, getChunksForDocument(doc.id).length));
 });
 
+/** Toggle pin on a document */
+router.patch("/documents/:id/pin", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [current] = await db.select().from(documentsTable).where(eq(documentsTable.id, id));
+  if (!current) { res.status(404).json({ error: "Document not found" }); return; }
+  const [doc] = await db
+    .update(documentsTable)
+    .set({ pinned: !current.pinned })
+    .where(eq(documentsTable.id, id))
+    .returning();
+  res.json(formatDoc(doc, getChunksForDocument(doc.id).length));
+});
+
+/** Restore a document from trash */
+router.patch("/documents/:id/restore", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [doc] = await db
+    .update(documentsTable)
+    .set({ deletedAt: null })
+    .where(eq(documentsTable.id, id))
+    .returning();
+  if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
+  await db.insert(activityTable).values({ type: "document_added", description: `Document "${doc.title}" restored from trash` });
+  res.json(formatDoc(doc, getChunksForDocument(doc.id).length));
+});
+
+/** Soft delete — moves to trash */
 router.delete("/documents/:id", async (req, res): Promise<void> => {
   const params = DeleteDocumentParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const [doc] = await db
-    .delete(documentsTable)
+    .update(documentsTable)
+    .set({ deletedAt: new Date() })
     .where(eq(documentsTable.id, params.data.id))
     .returning();
-  if (!doc) {
-    res.status(404).json({ error: "Document not found" });
-    return;
-  }
-  removeChunks(params.data.id);
-  await db.insert(activityTable).values({
-    type: "document_deleted",
-    description: `Document "${doc.title}" removed`,
-  });
+  if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
+  await db.insert(activityTable).values({ type: "document_deleted", description: `Document "${doc.title}" moved to trash` });
+  res.sendStatus(204);
+});
+
+/** Permanent delete */
+router.delete("/documents/:id/permanent", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [doc] = await db.delete(documentsTable).where(eq(documentsTable.id, id)).returning();
+  if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
+  removeChunks(id);
+  await db.insert(activityTable).values({ type: "document_deleted", description: `Document "${doc.title}" permanently deleted` });
   res.sendStatus(204);
 });
 
 router.get("/documents/:id/chunks", async (req, res): Promise<void> => {
   const params = GetDocumentChunksParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const chunks = getChunksForDocument(params.data.id);
-  res.json(
-    chunks.map((c) => ({
-      id: c.id,
-      content: c.content,
-      documentId: c.documentId,
-      chunkIndex: c.chunkIndex,
-      score: null,
-    }))
-  );
+  res.json(chunks.map((c) => ({
+    id: c.id, content: c.content, documentId: c.documentId, chunkIndex: c.chunkIndex, score: null,
+  })));
+});
+
+/** Full data export */
+router.get("/export", async (_req, res): Promise<void> => {
+  const [documents, chatSessions, chatMessages, flashcardDecks] = await Promise.all([
+    db.select().from(documentsTable).where(isNull(documentsTable.deletedAt)),
+    db.select().from(chatSessionsTable),
+    db.select().from(chatMessagesTable),
+    db.select().from(flashcardDecksTable),
+  ]);
+
+  const sessionsWithMessages = chatSessions.map((s) => ({
+    ...s,
+    createdAt: s.createdAt.toISOString(),
+    updatedAt: s.updatedAt.toISOString(),
+    messages: chatMessages
+      .filter((m) => m.sessionId === s.id)
+      .map((m) => ({ ...m, createdAt: m.createdAt.toISOString() })),
+  }));
+
+  res.setHeader("Content-Disposition", `attachment; filename="mindforge-export-${new Date().toISOString().slice(0, 10)}.json"`);
+  res.json({
+    exportedAt: new Date().toISOString(),
+    documents: documents.map((d) => formatDoc(d, getChunksForDocument(d.id).length)),
+    chatSessions: sessionsWithMessages,
+    flashcardDecks: flashcardDecks.map((deck) => ({
+      ...deck,
+      createdAt: deck.createdAt.toISOString(),
+    })),
+  });
 });
 
 export default router;

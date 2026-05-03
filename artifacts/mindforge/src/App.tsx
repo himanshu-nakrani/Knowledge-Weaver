@@ -8,6 +8,7 @@ import Documents from "@/pages/Documents";
 import Flashcards from "@/pages/Flashcards";
 import Eval from "@/pages/Eval";
 import Settings from "@/pages/Settings";
+import Trash from "@/pages/Trash";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,6 +27,7 @@ function Router() {
       <Route path="/flashcards" component={Flashcards} />
       <Route path="/eval" component={Eval} />
       <Route path="/settings" component={Settings} />
+      <Route path="/trash" component={Trash} />
       <Route component={NotFound} />
     </Switch>
   );

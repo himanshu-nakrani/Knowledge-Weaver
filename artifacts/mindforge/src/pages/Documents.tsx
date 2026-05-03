@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { useListDocuments, useDeleteDocument } from "@workspace/api-client-react";
-import { getListDocumentsQueryKey } from "@workspace/api-client-react";
+import {
+  useListDocuments,
+  useDeleteDocument,
+  usePinDocument,
+  getListDocumentsQueryKey,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { UploadModal } from "@/components/UploadModal";
 import { DocumentReader } from "@/components/DocumentReader";
 import { ToolResultModal } from "@/components/ToolResultModal";
-import { Search, Plus, Trash2, FileText, File, Github, Globe, ExternalLink, BookOpen } from "lucide-react";
+import { Search, Plus, Trash2, FileText, File, Github, Globe, ExternalLink, BookOpen, Pin, PinOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const typeIcons: Record<string, React.ReactNode> = {
@@ -37,15 +41,98 @@ export default function Documents() {
 
   const { data: docs = [], isLoading } = useListDocuments({ search: search || undefined, tag: filterTag || undefined });
   const deleteDoc = useDeleteDocument();
-  // readerDoc needs to resolve after docs loads
+  const pinDoc = usePinDocument();
   const resolvedReader = readerDoc ? (docs.find((d) => d.id === readerDoc.id) ?? readerDoc) : null;
 
   const allTags = Array.from(new Set(docs.flatMap((d) => d.tags)));
+  const pinnedDocs = docs.filter((d) => d.pinned);
+  const unpinnedDocs = docs.filter((d) => !d.pinned);
 
   const handleDelete = async (id: number) => {
     await deleteDoc.mutateAsync({ id });
     queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });
   };
+
+  const handlePin = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    await pinDoc.mutateAsync({ id });
+    queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });
+  };
+
+  const DocCard = ({ doc }: { doc: (typeof docs)[0] }) => (
+    <motion.div
+      key={doc.id}
+      layout
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      onClick={() => setReaderDoc(doc)}
+      className={`group relative border rounded-xl p-4 bg-card hover:border-primary/30 transition-all duration-200 cursor-pointer ${typeColors[doc.type] ?? "border-border"} ${doc.pinned ? "ring-1 ring-primary/20" : ""}`}
+    >
+      {doc.pinned && (
+        <div className="absolute top-2 right-2">
+          <Pin className="h-3 w-3 text-primary/60 fill-primary/30" />
+        </div>
+      )}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-2">
+          {typeIcons[doc.type]}
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{doc.type}</span>
+        </div>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
+          <button
+            onClick={(e) => handlePin(e, doc.id)}
+            title={doc.pinned ? "Unpin" : "Pin"}
+            className={`p-1 rounded transition-colors ${doc.pinned ? "text-primary" : "text-muted-foreground hover:text-primary"}`}
+          >
+            {doc.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setToolState({ type: "flashcards", docId: doc.id }); }}
+            title="Generate flashcards"
+            className="p-1 text-muted-foreground hover:text-primary rounded transition-colors"
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
+            className="p-1 text-muted-foreground hover:text-destructive rounded transition-colors"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      <h3 className="font-semibold text-foreground text-sm mb-1 line-clamp-2">{doc.title}</h3>
+      <p className="text-muted-foreground text-xs line-clamp-2 mb-3">{doc.content.slice(0, 100)}...</p>
+
+      <div className="flex items-center justify-between">
+        <div className="flex flex-wrap gap-1">
+          {doc.tags.slice(0, 3).map((tag) => (
+            <span key={tag} className="px-1.5 py-0.5 bg-primary/10 text-primary text-xs rounded font-medium">
+              {tag}
+            </span>
+          ))}
+        </div>
+        <span className="text-xs text-muted-foreground">{doc.chunkCount} chunks</span>
+      </div>
+
+      {doc.sourceUrl && (
+        <a
+          href={doc.sourceUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 flex items-center gap-1 text-xs text-primary hover:underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ExternalLink className="h-3 w-3" />
+          View source
+        </a>
+      )}
+
+      <p className="text-xs text-muted-foreground mt-2">{new Date(doc.createdAt).toLocaleDateString()}</p>
+    </motion.div>
+  );
 
   return (
     <AppLayout>
@@ -119,72 +206,35 @@ export default function Documents() {
               </div>
             </div>
           ) : (
-            <motion.div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-6">
-              <AnimatePresence>
-                {docs.map((doc) => (
-                  <motion.div
-                    key={doc.id}
-                    layout
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    onClick={() => setReaderDoc(doc)}
-                    className={`group relative border rounded-xl p-4 bg-card hover:border-primary/30 transition-all duration-200 cursor-pointer ${typeColors[doc.type] ?? "border-border"}`}
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        {typeIcons[doc.type]}
-                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{doc.type}</span>
-                      </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setToolState({ type: "flashcards", docId: doc.id }); }}
-                          title="Generate flashcards"
-                          className="p-1 text-muted-foreground hover:text-primary rounded transition-colors"
-                        >
-                          <BookOpen className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
-                          className="p-1 text-muted-foreground hover:text-destructive rounded transition-colors"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <h3 className="font-semibold text-foreground text-sm mb-1 line-clamp-2">{doc.title}</h3>
-                    <p className="text-muted-foreground text-xs line-clamp-2 mb-3">{doc.content.slice(0, 100)}...</p>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-wrap gap-1">
-                        {doc.tags.slice(0, 3).map((tag) => (
-                          <span key={tag} className="px-1.5 py-0.5 bg-primary/10 text-primary text-xs rounded font-medium">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                      <span className="text-xs text-muted-foreground">{doc.chunkCount} chunks</span>
-                    </div>
-
-                    {doc.sourceUrl && (
-                      <a
-                        href={doc.sourceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-2 flex items-center gap-1 text-xs text-primary hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                        View source
-                      </a>
-                    )}
-
-                    <p className="text-xs text-muted-foreground mt-2">{new Date(doc.createdAt).toLocaleDateString()}</p>
+            <div className="pb-6 space-y-6">
+              {pinnedDocs.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Pin className="h-3.5 w-3.5 text-primary/70" />
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pinned</span>
+                  </div>
+                  <motion.div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <AnimatePresence>
+                      {pinnedDocs.map((doc) => <DocCard key={doc.id} doc={doc} />)}
+                    </AnimatePresence>
                   </motion.div>
-                ))}
-              </AnimatePresence>
-            </motion.div>
+                </div>
+              )}
+              {unpinnedDocs.length > 0 && (
+                <div>
+                  {pinnedDocs.length > 0 && (
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">All Documents</span>
+                    </div>
+                  )}
+                  <motion.div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <AnimatePresence>
+                      {unpinnedDocs.map((doc) => <DocCard key={doc.id} doc={doc} />)}
+                    </AnimatePresence>
+                  </motion.div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

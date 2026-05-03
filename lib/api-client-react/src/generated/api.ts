@@ -26,7 +26,9 @@ import type {
   Document,
   ErrorResponse,
   EvalResult,
+  ExportBundle,
   FlashcardsResult,
+  GetCurrentAuthUserResponse,
   GetRetrievedChunksParams,
   HealthStatus,
   IngestGithubBody,
@@ -1586,6 +1588,399 @@ export function useGetRetrievedChunks<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetRetrievedChunksQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get the currently authenticated user
+ */
+export const getGetCurrentAuthUserUrl = () => {
+  return `/api/auth/user`;
+};
+
+export const getCurrentAuthUser = async (
+  options?: RequestInit,
+): Promise<GetCurrentAuthUserResponse> => {
+  return customFetch<GetCurrentAuthUserResponse>(getGetCurrentAuthUserUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCurrentAuthUserQueryKey = () => {
+  return [`/api/auth/user`] as const;
+};
+
+export const getGetCurrentAuthUserQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCurrentAuthUser>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCurrentAuthUser>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetCurrentAuthUserQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getCurrentAuthUser>>
+  > = ({ signal }) => getCurrentAuthUser({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCurrentAuthUser>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCurrentAuthUserQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCurrentAuthUser>>
+>;
+export type GetCurrentAuthUserQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the currently authenticated user
+ */
+
+export function useGetCurrentAuthUser<
+  TData = Awaited<ReturnType<typeof getCurrentAuthUser>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCurrentAuthUser>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCurrentAuthUserQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Toggle pin on a document
+ */
+export const getPinDocumentUrl = (id: number) => {
+  return `/api/documents/${id}/pin`;
+};
+
+export const pinDocument = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Document> => {
+  return customFetch<Document>(getPinDocumentUrl(id), {
+    ...options,
+    method: "PATCH",
+  });
+};
+
+export const getPinDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof pinDocument>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof pinDocument>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["pinDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof pinDocument>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return pinDocument(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PinDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof pinDocument>>
+>;
+
+export type PinDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Toggle pin on a document
+ */
+export const usePinDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof pinDocument>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof pinDocument>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getPinDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Restore a soft-deleted document from trash
+ */
+export const getRestoreDocumentUrl = (id: number) => {
+  return `/api/documents/${id}/restore`;
+};
+
+export const restoreDocument = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Document> => {
+  return customFetch<Document>(getRestoreDocumentUrl(id), {
+    ...options,
+    method: "PATCH",
+  });
+};
+
+export const getRestoreDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof restoreDocument>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof restoreDocument>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["restoreDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof restoreDocument>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return restoreDocument(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RestoreDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof restoreDocument>>
+>;
+
+export type RestoreDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Restore a soft-deleted document from trash
+ */
+export const useRestoreDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof restoreDocument>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof restoreDocument>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getRestoreDocumentMutationOptions(options));
+};
+
+/**
+ * @summary List soft-deleted documents
+ */
+export const getListTrashDocumentsUrl = () => {
+  return `/api/documents/trash`;
+};
+
+export const listTrashDocuments = async (
+  options?: RequestInit,
+): Promise<Document[]> => {
+  return customFetch<Document[]>(getListTrashDocumentsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListTrashDocumentsQueryKey = () => {
+  return [`/api/documents/trash`] as const;
+};
+
+export const getListTrashDocumentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTrashDocuments>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listTrashDocuments>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListTrashDocumentsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listTrashDocuments>>
+  > = ({ signal }) => listTrashDocuments({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTrashDocuments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListTrashDocumentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTrashDocuments>>
+>;
+export type ListTrashDocumentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List soft-deleted documents
+ */
+
+export function useListTrashDocuments<
+  TData = Awaited<ReturnType<typeof listTrashDocuments>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listTrashDocuments>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListTrashDocumentsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Export all user data as a JSON bundle
+ */
+export const getExportAllDataUrl = () => {
+  return `/api/export`;
+};
+
+export const exportAllData = async (
+  options?: RequestInit,
+): Promise<ExportBundle> => {
+  return customFetch<ExportBundle>(getExportAllDataUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getExportAllDataQueryKey = () => {
+  return [`/api/export`] as const;
+};
+
+export const getExportAllDataQueryOptions = <
+  TData = Awaited<ReturnType<typeof exportAllData>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof exportAllData>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getExportAllDataQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof exportAllData>>> = ({
+    signal,
+  }) => exportAllData({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof exportAllData>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ExportAllDataQueryResult = NonNullable<
+  Awaited<ReturnType<typeof exportAllData>>
+>;
+export type ExportAllDataQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Export all user data as a JSON bundle
+ */
+
+export function useExportAllData<
+  TData = Awaited<ReturnType<typeof exportAllData>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof exportAllData>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getExportAllDataQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

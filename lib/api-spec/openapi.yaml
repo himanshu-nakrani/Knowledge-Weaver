@@ -9,6 +9,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: Auth
+    description: Browser and mobile authentication endpoints.
   - name: documents
     description: Document ingestion and library
   - name: chat
@@ -385,6 +387,85 @@ paths:
               schema:
                 $ref: "#/components/schemas/EvalResult"
 
+  /auth/user:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAuthUser
+      summary: Get the currently authenticated user
+      responses:
+        "200":
+          description: Auth status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetCurrentAuthUserResponse"
+
+  /documents/{id}/pin:
+    patch:
+      operationId: pinDocument
+      tags: [documents]
+      summary: Toggle pin on a document
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
+  /documents/{id}/restore:
+    patch:
+      operationId: restoreDocument
+      tags: [documents]
+      summary: Restore a soft-deleted document from trash
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
+  /documents/trash:
+    get:
+      operationId: listTrashDocuments
+      tags: [documents]
+      summary: List soft-deleted documents
+      responses:
+        "200":
+          description: Trash documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Document"
+
+  /export:
+    get:
+      operationId: exportAllData
+      tags: [stats]
+      summary: Export all user data as a JSON bundle
+      responses:
+        "200":
+          description: Full data export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportBundle"
+
   /stats/overview:
     get:
       operationId: getStatsOverview
@@ -440,7 +521,7 @@ components:
           type: string
         type:
           type: string
-          enum: [pdf, markdown, text, github]
+          enum: [pdf, markdown, text, github, url]
         content:
           type: string
         tags:
@@ -450,6 +531,10 @@ components:
         chunkCount:
           type: integer
         sourceUrl:
+          type: ["string", "null"]
+        pinned:
+          type: boolean
+        deletedAt:
           type: ["string", "null"]
         createdAt:
           type: string
@@ -463,8 +548,93 @@ components:
         - tags
         - chunkCount
         - sourceUrl
+        - pinned
+        - deletedAt
         - createdAt
         - updatedAt
+
+    AuthUser:
+      type: object
+      required: [id, email, firstName, lastName, profileImageUrl]
+      properties:
+        id:
+          type: string
+        email:
+          type: ["string", "null"]
+          format: email
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
+        profileImageUrl:
+          type: ["string", "null"]
+
+    GetCurrentAuthUserResponse:
+      type: object
+      required: [user]
+      properties:
+        user:
+          oneOf:
+            - $ref: '#/components/schemas/AuthUser'
+            - type: "null"
+
+    ExchangeMobileAuthorizationCodeBody:
+      type: object
+      required: [code, code_verifier, redirect_uri, state]
+      properties:
+        code:
+          type: string
+          minLength: 1
+        code_verifier:
+          type: string
+          minLength: 1
+        redirect_uri:
+          type: string
+          minLength: 1
+          format: uri
+        state:
+          type: string
+          minLength: 1
+        nonce:
+          type: string
+          minLength: 1
+
+    ExchangeMobileAuthorizationCodeResponse:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+
+    LogoutMobileSessionResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+
+    ExportBundle:
+      type: object
+      properties:
+        exportedAt:
+          type: string
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/Document"
+        chatSessions:
+          type: array
+          items:
+            type: object
+        flashcardDecks:
+          type: array
+          items:
+            type: object
+      required:
+        - exportedAt
+        - documents
+        - chatSessions
+        - flashcardDecks
 
     UploadDocumentBody:
       type: object

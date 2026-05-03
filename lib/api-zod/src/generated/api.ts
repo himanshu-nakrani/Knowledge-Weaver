@@ -25,11 +25,13 @@ export const ListDocumentsQueryParams = zod.object({
 export const ListDocumentsResponseItem = zod.object({
   id: zod.number(),
   title: zod.string(),
-  type: zod.enum(["pdf", "markdown", "text", "github"]),
+  type: zod.enum(["pdf", "markdown", "text", "github", "url"]),
   content: zod.string(),
   tags: zod.array(zod.string()),
   chunkCount: zod.number(),
   sourceUrl: zod.string().nullable(),
+  pinned: zod.boolean(),
+  deletedAt: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -55,11 +57,13 @@ export const GetDocumentParams = zod.object({
 export const GetDocumentResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
-  type: zod.enum(["pdf", "markdown", "text", "github"]),
+  type: zod.enum(["pdf", "markdown", "text", "github", "url"]),
   content: zod.string(),
   tags: zod.array(zod.string()),
   chunkCount: zod.number(),
   sourceUrl: zod.string().nullable(),
+  pinned: zod.boolean(),
+  deletedAt: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -79,11 +83,13 @@ export const UpdateDocumentBody = zod.object({
 export const UpdateDocumentResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
-  type: zod.enum(["pdf", "markdown", "text", "github"]),
+  type: zod.enum(["pdf", "markdown", "text", "github", "url"]),
   content: zod.string(),
   tags: zod.array(zod.string()),
   chunkCount: zod.number(),
   sourceUrl: zod.string().nullable(),
+  pinned: zod.boolean(),
+  deletedAt: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -283,6 +289,108 @@ export const GetRetrievedChunksResponse = zod.object({
   ),
   faithfulnessScore: zod.number().nullable(),
   usedWebSearch: zod.boolean(),
+});
+
+/**
+ * @summary Get the currently authenticated user
+ */
+export const GetCurrentAuthUserResponse = zod.object({
+  user: zod.union([
+    zod.object({
+      id: zod.string(),
+      email: zod.string().email().nullable(),
+      firstName: zod.string().nullable(),
+      lastName: zod.string().nullable(),
+      profileImageUrl: zod.string().nullable(),
+    }),
+    zod.null(),
+  ]),
+});
+
+/**
+ * @summary Toggle pin on a document
+ */
+export const PinDocumentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const PinDocumentResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  type: zod.enum(["pdf", "markdown", "text", "github", "url"]),
+  content: zod.string(),
+  tags: zod.array(zod.string()),
+  chunkCount: zod.number(),
+  sourceUrl: zod.string().nullable(),
+  pinned: zod.boolean(),
+  deletedAt: zod.string().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Restore a soft-deleted document from trash
+ */
+export const RestoreDocumentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const RestoreDocumentResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  type: zod.enum(["pdf", "markdown", "text", "github", "url"]),
+  content: zod.string(),
+  tags: zod.array(zod.string()),
+  chunkCount: zod.number(),
+  sourceUrl: zod.string().nullable(),
+  pinned: zod.boolean(),
+  deletedAt: zod.string().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary List soft-deleted documents
+ */
+export const ListTrashDocumentsResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  type: zod.enum(["pdf", "markdown", "text", "github", "url"]),
+  content: zod.string(),
+  tags: zod.array(zod.string()),
+  chunkCount: zod.number(),
+  sourceUrl: zod.string().nullable(),
+  pinned: zod.boolean(),
+  deletedAt: zod.string().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const ListTrashDocumentsResponse = zod.array(
+  ListTrashDocumentsResponseItem,
+);
+
+/**
+ * @summary Export all user data as a JSON bundle
+ */
+export const ExportAllDataResponse = zod.object({
+  exportedAt: zod.string(),
+  documents: zod.array(
+    zod.object({
+      id: zod.number(),
+      title: zod.string(),
+      type: zod.enum(["pdf", "markdown", "text", "github", "url"]),
+      content: zod.string(),
+      tags: zod.array(zod.string()),
+      chunkCount: zod.number(),
+      sourceUrl: zod.string().nullable(),
+      pinned: zod.boolean(),
+      deletedAt: zod.string().nullable(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  chatSessions: zod.array(zod.object({}).passthrough()),
+  flashcardDecks: zod.array(zod.object({}).passthrough()),
 });
 
 /**

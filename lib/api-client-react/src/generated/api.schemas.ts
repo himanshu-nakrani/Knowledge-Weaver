@@ -20,6 +20,7 @@ export const DocumentType = {
   markdown: "markdown",
   text: "text",
   github: "github",
+  url: "url",
 } as const;
 
 export interface Document {
@@ -31,8 +32,59 @@ export interface Document {
   chunkCount: number;
   /** @nullable */
   sourceUrl: string | null;
+  pinned: boolean;
+  /** @nullable */
+  deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AuthUser {
+  id: string;
+  /** @nullable */
+  email: string | null;
+  /** @nullable */
+  firstName: string | null;
+  /** @nullable */
+  lastName: string | null;
+  /** @nullable */
+  profileImageUrl: string | null;
+}
+
+export interface GetCurrentAuthUserResponse {
+  user: AuthUser | null;
+}
+
+export interface ExchangeMobileAuthorizationCodeBody {
+  /** @minLength 1 */
+  code: string;
+  /** @minLength 1 */
+  code_verifier: string;
+  /** @minLength 1 */
+  redirect_uri: string;
+  /** @minLength 1 */
+  state: string;
+  /** @minLength 1 */
+  nonce?: string;
+}
+
+export interface ExchangeMobileAuthorizationCodeResponse {
+  token: string;
+}
+
+export interface LogoutMobileSessionResponse {
+  success: boolean;
+}
+
+export type ExportBundleChatSessionsItem = { [key: string]: unknown };
+
+export type ExportBundleFlashcardDecksItem = { [key: string]: unknown };
+
+export interface ExportBundle {
+  exportedAt: string;
+  documents: Document[];
+  chatSessions: ExportBundleChatSessionsItem[];
+  flashcardDecks: ExportBundleFlashcardDecksItem[];
 }
 
 export type UploadDocumentBodyType =
