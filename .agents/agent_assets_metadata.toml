@@ -1,0 +1,20 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "R3EYvKrVVkg1xi_afQJ9k"
+uri = "file://attached_assets/design_var_1_warm_inviting.png"
+type = "image"
+title = "Warm & Inviting variation"
+
+[[generated]]
+id = "1IcENrKBhA79mXQjU4o9a"
+uri = "file://attached_assets/design_var_2_minimal_formal.png"
+type = "image"
+title = "Minimal & Formal variation"
+
+[[generated]]
+id = "Ghng86u7RmPnsczLGGLQA"
+uri = "file://attached_assets/design_var_3_playful_energetic.png"
+type = "image"
+title = "Playful & Energetic variation"
