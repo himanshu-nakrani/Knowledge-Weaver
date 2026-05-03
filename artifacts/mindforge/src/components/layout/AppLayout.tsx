@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import {
   Brain, FileText, Settings, ActivitySquare, Menu,
   MessageSquare, Plus, Trash2, BookOpen, StickyNote,
   LogIn, LogOut, User, Trash, Network, Bot, Sun, Moon, Keyboard,
+  FolderOpen, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -15,12 +16,21 @@ import { ShortcutsModal } from "@/components/ShortcutsModal";
 import { useAuth } from "@workspace/replit-auth-web";
 import { useTheme } from "@/hooks/useTheme";
 
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 interface ChatSession {
   id: number;
   title: string;
   messageCount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+interface Collection {
+  id: number;
+  name: string;
+  color: string;
+  documentCount: number;
 }
 
 interface AppLayoutProps {
@@ -43,12 +53,61 @@ const navItems = [
 
 export function AppLayout({ children, sessions, activeSid, onSelectSession, onNewSession }: AppLayoutProps) {
   const [location] = useLocation();
+  const searchString = useSearch();
   const queryClient = useQueryClient();
   const deleteSession = useDeleteChatSession();
   const [showNote, setShowNote] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const { user, isLoading: authLoading, login, logout } = useAuth();
   const { theme, toggle: toggleTheme } = useTheme();
+
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [showNewColl, setShowNewColl] = useState(false);
+  const [newCollName, setNewCollName] = useState("");
+  const [newCollColor, setNewCollColor] = useState("#6366f1");
+
+  const activeCollectionId = (() => {
+    if (location !== "/documents") return null;
+    const p = new URLSearchParams(searchString);
+    const c = p.get("c");
+    return c ? Number(c) : null;
+  })();
+
+  useEffect(() => {
+    fetch(`${BASE}/api/collections`)
+      .then((r) => r.json())
+      .then((data) => setCollections(data as Collection[]))
+      .catch(() => {});
+  }, [location]);
+
+  const handleCreateCollection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newCollName.trim();
+    if (!name) return;
+    try {
+      const resp = await fetch(`${BASE}/api/collections`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, color: newCollColor }),
+      });
+      if (resp.ok) {
+        const coll = await resp.json() as Collection;
+        setCollections((prev) => [...prev, coll]);
+        setNewCollName("");
+        setNewCollColor("#6366f1");
+        setShowNewColl(false);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleDeleteCollection = async (e: React.MouseEvent, id: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    await fetch(`${BASE}/api/collections/${id}`, { method: "DELETE" });
+    setCollections((prev) => prev.filter((c) => c.id !== id));
+  };
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -87,6 +146,8 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
     ? (user.firstName ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ""}`.trim() : user.email ?? "User")
     : null;
 
+  const PRESET_COLORS = ["#6366f1", "#f59e0b", "#10b981", "#3b82f6", "#ec4899", "#f97316", "#8b5cf6"];
+
   const NavContent = () => (
     <div className="flex flex-col h-full border-r border-border" style={{ background: "hsl(220 15% 5%)" }}>
       {/* Logo */}
@@ -106,7 +167,7 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
       {/* Nav */}
       <nav className="px-2 py-3 space-y-0.5">
         {navItems.map((item) => {
-          const isActive = item.href === "/" ? location === "/" : location.startsWith(item.href);
+          const isActive = item.href === "/" ? location === "/" : (location.startsWith(item.href) && !activeCollectionId);
           return (
             <Link key={item.href} href={item.href}>
               <div
@@ -147,9 +208,98 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
         </Link>
       </nav>
 
+      {/* Collections */}
+      <div className="border-t border-border">
+        <div className="flex items-center justify-between px-3 py-2">
+          <div className="flex items-center gap-1.5">
+            <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="hidden lg:block text-xs font-medium text-muted-foreground">Collections</span>
+          </div>
+          <button
+            onClick={() => setShowNewColl((v) => !v)}
+            className="p-1 text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors"
+            title="New collection"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {/* New collection form */}
+        {showNewColl && (
+          <div className="px-2 pb-2">
+            <form onSubmit={handleCreateCollection} className="space-y-1.5">
+              <input
+                autoFocus
+                value={newCollName}
+                onChange={(e) => setNewCollName(e.target.value)}
+                placeholder="Collection name"
+                className="w-full px-2 py-1.5 bg-card border border-border rounded-lg text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+              />
+              <div className="flex items-center gap-1 flex-wrap">
+                {PRESET_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setNewCollColor(c)}
+                    className={`w-4 h-4 rounded-full transition-transform ${newCollColor === c ? "scale-125 ring-1 ring-white/50" : "hover:scale-110"}`}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+              <div className="flex gap-1">
+                <button
+                  type="submit"
+                  className="flex-1 px-2 py-1 bg-primary text-primary-foreground rounded text-xs font-medium hover:opacity-90"
+                >
+                  Create
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowNewColl(false); setNewCollName(""); }}
+                  className="px-2 py-1 text-muted-foreground hover:text-foreground rounded text-xs"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Collection list */}
+        <div className="px-2 pb-2 space-y-0.5 max-h-48 overflow-y-auto">
+          {collections.length === 0 ? (
+            <p className="hidden lg:block text-[10px] text-muted-foreground px-2 pb-1">No collections yet</p>
+          ) : (
+            collections.map((coll) => (
+              <Link key={coll.id} href={`/documents?c=${coll.id}`}>
+                <div
+                  className={`group flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-all ${
+                    activeCollectionId === coll.id
+                      ? "text-foreground"
+                      : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                  }`}
+                  style={activeCollectionId === coll.id ? { background: `${coll.color}18`, borderLeft: `2px solid ${coll.color}` } : {}}
+                >
+                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: coll.color }} />
+                  <span className="hidden lg:block text-xs truncate flex-1">{coll.name}</span>
+                  <span className="hidden lg:block text-[10px] text-muted-foreground/60 shrink-0">{coll.documentCount}</span>
+                  <button
+                    onClick={(e) => handleDeleteCollection(e, coll.id)}
+                    className="hidden lg:hidden group-hover:block p-0.5 hover:text-destructive transition-colors rounded ml-auto"
+                    title="Delete collection"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </div>
+              </Link>
+            ))
+          )}
+        </div>
+      </div>
+
       {/* Sessions */}
       {sessions !== undefined && (
-        <div className="flex-1 flex flex-col overflow-hidden border-t border-border mt-2">
+        <div className="flex-1 flex flex-col overflow-hidden border-t border-border">
           <div className="flex items-center justify-between px-3 py-2">
             <div className="flex items-center gap-1.5">
               <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />

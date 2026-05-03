@@ -1,5 +1,4 @@
 import { db, documentsTable, type Document } from "@workspace/db";
-import { sql, ilike, or } from "drizzle-orm";
 import { logger } from "./logger";
 
 export interface RetrievedChunk {
@@ -11,14 +10,11 @@ export interface RetrievedChunk {
   documentTitle: string;
 }
 
-// In-memory chunk store (chunks are re-loaded from docs on startup)
-// For a production system, use pgvector or Chroma
 interface StoredChunk {
   id: string;
   documentId: number;
   chunkIndex: number;
   content: string;
-  tsvector?: string;
 }
 
 const chunkStore = new Map<string, StoredChunk>();
@@ -80,6 +76,15 @@ function bm25Score(query: string[], doc: string[]): number {
   return score;
 }
 
+/**
+ * Position-based re-ranking bonus: earlier chunks get a small boost since
+ * introductory and summary content tends to be most relevant.
+ * Bonus decays exponentially: ~5% for chunk 0, ~2.5% for chunk 5, ~0.7% for chunk 20.
+ */
+function positionBonus(chunkIndex: number): number {
+  return 0.05 * Math.exp(-chunkIndex / 10);
+}
+
 export async function similaritySearch(
   query: string,
   k = 5,
@@ -87,7 +92,6 @@ export async function similaritySearch(
 ): Promise<RetrievedChunk[]> {
   const queryTokens = tokenize(query);
 
-  // Get documents for titles
   const docs = await db.select().from(documentsTable);
   const docMap = new Map<number, Document>(docs.map((d) => [d.id, d]));
 
@@ -102,24 +106,35 @@ export async function similaritySearch(
 
   const scored = chunks.map((chunk) => {
     const chunkTokens = tokenize(chunk.content);
-    const score = bm25Score(queryTokens, chunkTokens);
-    return { chunk, score };
+    const bm25 = bm25Score(queryTokens, chunkTokens);
+    return { chunk, bm25 };
   });
 
-  const topChunks = scored
-    .filter((s) => s.score > 0)
+  const relevant = scored.filter((s) => s.bm25 > 0);
+  if (relevant.length === 0) return [];
+
+  // Normalize BM25 scores to 0-1
+  const maxBm25 = Math.max(...relevant.map((s) => s.bm25));
+
+  // Re-rank: combine normalized BM25 with position bonus
+  const reranked = relevant.map((s) => ({
+    chunk: s.chunk,
+    score: (s.bm25 / maxBm25) + positionBonus(s.chunk.chunkIndex),
+  }));
+
+  const topChunks = reranked
     .sort((a, b) => b.score - a.score)
     .slice(0, k);
 
-  // Normalize scores to 0-1
-  const maxScore = topChunks[0]?.score ?? 1;
+  // Final normalization to 0-1
+  const maxFinal = topChunks[0]?.score ?? 1;
 
   return topChunks.map(({ chunk, score }) => ({
     id: chunk.id,
     content: chunk.content,
     documentId: chunk.documentId,
     chunkIndex: chunk.chunkIndex,
-    score: maxScore > 0 ? score / maxScore : 0,
+    score: maxFinal > 0 ? score / maxFinal : 0,
     documentTitle: docMap.get(chunk.documentId)?.title ?? "Unknown",
   }));
 }

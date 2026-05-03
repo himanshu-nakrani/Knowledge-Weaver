@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useLocation, useSearch } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
 import {
   useListDocuments,
@@ -10,7 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { UploadModal } from "@/components/UploadModal";
 import { DocumentReader } from "@/components/DocumentReader";
 import { ToolResultModal } from "@/components/ToolResultModal";
-import { Search, Plus, Trash2, FileText, File, Github, Globe, ExternalLink, BookOpen, Pin, PinOff, Copy, Share2, GitBranch, CheckSquare, Square, ArrowUpDown } from "lucide-react";
+import { Search, Plus, Trash2, FileText, File, Github, Globe, ExternalLink, BookOpen, Pin, PinOff, Copy, Share2, GitBranch, CheckSquare, Square, ArrowUpDown, FolderOpen, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 
@@ -32,9 +33,24 @@ const typeColors: Record<string, string> = {
   url: "border-cyan-400/20 bg-cyan-400/5",
 };
 
+interface Collection {
+  id: number;
+  name: string;
+  color: string;
+  documentCount: number;
+}
+
 type ToolType = "summarize" | "actions" | "flashcards" | "mindmap";
 
 export default function Documents() {
+  const [, setLocation] = useLocation();
+  const searchString = useSearch();
+  const filterCollection = (() => {
+    const p = new URLSearchParams(searchString);
+    const c = p.get("c");
+    return c ? Number(c) : null;
+  })();
+
   const [search, setSearch] = useState("");
   const [filterTag, setFilterTag] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
@@ -44,9 +60,12 @@ export default function Documents() {
   const [bulkMode, setBulkMode] = useState(false);
   const [shareModalDocId, setShareModalDocId] = useState<number | null>(null);
   const [shareInfo, setShareInfo] = useState<{ token: string; url: string } | null>(null);
-  const [filterCollection, setFilterCollection] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "title" | "type">("newest");
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [moveDocId, setMoveDocId] = useState<number | null>(null);
+  const moveDropdownRef = useRef<HTMLDivElement>(null);
+
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -56,6 +75,16 @@ export default function Documents() {
   const resolvedReader = readerDoc ? (docs.find((d) => d.id === readerDoc.id) ?? readerDoc) : null;
 
   const allTags = Array.from(new Set(docs.flatMap((d) => d.tags)));
+
+  useEffect(() => {
+    fetch(`${BASE}/api/collections`)
+      .then((r) => r.json())
+      .then((data) => setCollections(data as Collection[]))
+      .catch(() => {});
+  }, []);
+
+  const collectionMap = useMemo(() => new Map(collections.map((c) => [c.id, c])), [collections]);
+  const activeCollection = filterCollection ? collectionMap.get(filterCollection) : null;
 
   const sortedDocs = useMemo(() => {
     const copy = [...docs];
@@ -68,7 +97,6 @@ export default function Documents() {
 
   const pinnedDocs = sortedDocs.filter((d) => d.pinned);
   const unpinnedDocs = sortedDocs.filter((d) => !d.pinned);
-  const collectionLabel = filterCollection ? `Collection #${filterCollection}` : null;
 
   const handleDelete = async (id: number) => {
     await deleteDoc.mutateAsync({ id });
@@ -116,6 +144,23 @@ export default function Documents() {
     }
   };
 
+  const handleMoveToCollection = async (e: React.MouseEvent, docId: number, collectionId: number | null) => {
+    e.stopPropagation();
+    try {
+      await fetch(`${BASE}/api/documents/${docId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ collectionId }),
+      });
+      queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });
+      setMoveDocId(null);
+      const collName = collectionId ? collectionMap.get(collectionId)?.name : null;
+      toast({ title: collName ? `Moved to "${collName}"` : "Removed from collection" });
+    } catch {
+      toast({ title: "Move failed", variant: "destructive" });
+    }
+  };
+
   const handleBulkDelete = async () => {
     try {
       for (const id of selectedIds) {
@@ -130,89 +175,146 @@ export default function Documents() {
     }
   };
 
-  const toggleSelect = (e: React.MouseEvent, id: number) => {
-    e.stopPropagation();
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (moveDropdownRef.current && !moveDropdownRef.current.contains(e.target as Node)) {
+        setMoveDocId(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
-  const DocCard = ({ doc }: { doc: (typeof docs)[0] }) => (
-    <motion.div
-      key={doc.id}
-      layout
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      onClick={() => bulkMode ? setSelectedIds((prev) => { const next = new Set(prev); next.has(doc.id) ? next.delete(doc.id) : next.add(doc.id); return next; }) : setReaderDoc(doc)}
-      className={`group relative border rounded-xl p-4 bg-card hover:border-primary/30 transition-all duration-200 cursor-pointer ${typeColors[doc.type] ?? "border-border"} ${doc.pinned ? "ring-1 ring-primary/20" : ""} ${selectedIds.has(doc.id) ? "ring-1 ring-primary/40 border-primary/40" : ""}`}
-    >
-      {/* Bulk select indicator */}
-      {bulkMode && (
-        <div className="absolute top-2 left-2">
-          {selectedIds.has(doc.id)
-            ? <CheckSquare className="h-4 w-4 text-primary" />
-            : <Square className="h-4 w-4 text-muted-foreground" />
-          }
-        </div>
-      )}
-      {doc.pinned && !bulkMode && (
-        <div className="absolute top-2 right-2">
-          <Pin className="h-3 w-3 text-primary/60 fill-primary/30" />
-        </div>
-      )}
+  const DocCard = ({ doc }: { doc: (typeof docs)[0] }) => {
+    const docCollection = doc.collectionId ? collectionMap.get(doc.collectionId) : null;
 
-      <div className={`flex items-start justify-between mb-3 ${bulkMode ? "pl-6" : ""}`}>
-        <div className="flex items-center gap-2">
-          {typeIcons[doc.type]}
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{doc.type}</span>
-        </div>
-        {!bulkMode && (
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all duration-200">
-            <button onClick={(e) => handlePin(e, doc.id)} title={doc.pinned ? "Unpin" : "Pin"} className={`p-1 rounded transition-colors ${doc.pinned ? "text-primary" : "text-muted-foreground hover:text-primary"}`}>
-              {doc.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-            </button>
-            <button onClick={(e) => handleCopy(e, doc)} title="Copy content" className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors">
-              <Copy className="h-3.5 w-3.5" />
-            </button>
-            <button onClick={(e) => handleShare(e, doc.id)} title="Share document" className="p-1 text-muted-foreground hover:text-cyan-400 rounded transition-colors">
-              <Share2 className="h-3.5 w-3.5" />
-            </button>
-            <button onClick={(e) => handleDuplicate(e, doc.id)} title="Duplicate" className="p-1 text-muted-foreground hover:text-green-400 rounded transition-colors">
-              <GitBranch className="h-3.5 w-3.5" />
-            </button>
-            <button onClick={(e) => { e.stopPropagation(); setToolState({ type: "flashcards", docId: doc.id }); }} title="Generate flashcards" className="p-1 text-muted-foreground hover:text-primary rounded transition-colors">
-              <BookOpen className="h-3.5 w-3.5" />
-            </button>
-            <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }} className="p-1 text-muted-foreground hover:text-destructive rounded transition-colors">
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+    return (
+      <motion.div
+        key={doc.id}
+        layout
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        onClick={() => bulkMode ? setSelectedIds((prev) => { const next = new Set(prev); next.has(doc.id) ? next.delete(doc.id) : next.add(doc.id); return next; }) : setReaderDoc(doc)}
+        className={`group relative border rounded-xl p-4 bg-card hover:border-primary/30 transition-all duration-200 cursor-pointer ${typeColors[doc.type] ?? "border-border"} ${doc.pinned ? "ring-1 ring-primary/20" : ""} ${selectedIds.has(doc.id) ? "ring-1 ring-primary/40 border-primary/40" : ""}`}
+      >
+        {bulkMode && (
+          <div className="absolute top-2 left-2">
+            {selectedIds.has(doc.id)
+              ? <CheckSquare className="h-4 w-4 text-primary" />
+              : <Square className="h-4 w-4 text-muted-foreground" />
+            }
           </div>
         )}
-      </div>
+        {doc.pinned && !bulkMode && (
+          <div className="absolute top-2 right-2">
+            <Pin className="h-3 w-3 text-primary/60 fill-primary/30" />
+          </div>
+        )}
 
-      <h3 className={`font-semibold text-foreground text-sm mb-1 line-clamp-2 ${bulkMode ? "pl-6" : ""}`}>{doc.title}</h3>
-      <p className="text-muted-foreground text-xs line-clamp-2 mb-3">{doc.content.slice(0, 100)}...</p>
-
-      <div className="flex items-center justify-between">
-        <div className="flex flex-wrap gap-1">
-          {doc.tags.slice(0, 3).map((tag) => (
-            <span key={tag} className="px-1.5 py-0.5 bg-primary/10 text-primary text-xs rounded font-medium">{tag}</span>
-          ))}
+        <div className={`flex items-start justify-between mb-3 ${bulkMode ? "pl-6" : ""}`}>
+          <div className="flex items-center gap-2">
+            {typeIcons[doc.type]}
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{doc.type}</span>
+            {docCollection && (
+              <span
+                className="text-[10px] font-medium px-1.5 py-0.5 rounded-full border"
+                style={{ color: docCollection.color, borderColor: `${docCollection.color}40`, background: `${docCollection.color}12` }}
+              >
+                {docCollection.name}
+              </span>
+            )}
+          </div>
+          {!bulkMode && (
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all duration-200">
+              <button onClick={(e) => handlePin(e, doc.id)} title={doc.pinned ? "Unpin" : "Pin"} className={`p-1 rounded transition-colors ${doc.pinned ? "text-primary" : "text-muted-foreground hover:text-primary"}`}>
+                {doc.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+              </button>
+              <button onClick={(e) => handleCopy(e, doc)} title="Copy content" className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors">
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={(e) => handleShare(e, doc.id)} title="Share document" className="p-1 text-muted-foreground hover:text-cyan-400 rounded transition-colors">
+                <Share2 className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={(e) => handleDuplicate(e, doc.id)} title="Duplicate" className="p-1 text-muted-foreground hover:text-green-400 rounded transition-colors">
+                <GitBranch className="h-3.5 w-3.5" />
+              </button>
+              {/* Move to collection */}
+              <div className="relative" ref={moveDocId === doc.id ? moveDropdownRef : undefined}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setMoveDocId(moveDocId === doc.id ? null : doc.id); }}
+                  title="Move to collection"
+                  className="p-1 text-muted-foreground hover:text-amber-400 rounded transition-colors"
+                >
+                  <FolderOpen className="h-3.5 w-3.5" />
+                </button>
+                <AnimatePresence>
+                  {moveDocId === doc.id && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                      transition={{ duration: 0.12 }}
+                      className="absolute right-0 top-full mt-1 w-44 bg-card border border-border rounded-xl shadow-2xl z-40 overflow-hidden py-1"
+                    >
+                      {doc.collectionId && (
+                        <button
+                          onMouseDown={(e) => handleMoveToCollection(e, doc.id, null)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs text-destructive/80 hover:bg-destructive/10 transition-colors"
+                        >
+                          Remove from collection
+                        </button>
+                      )}
+                      {collections.length === 0 ? (
+                        <p className="px-3 py-2 text-xs text-muted-foreground">No collections yet</p>
+                      ) : (
+                        collections.map((coll) => (
+                          <button
+                            key={coll.id}
+                            onMouseDown={(e) => handleMoveToCollection(e, doc.id, coll.id)}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-foreground hover:bg-accent transition-colors"
+                          >
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: coll.color }} />
+                            <span className="truncate flex-1 text-left">{coll.name}</span>
+                            {doc.collectionId === coll.id && <Check className="h-3 w-3 text-primary shrink-0" />}
+                          </button>
+                        ))
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              <button onClick={(e) => { e.stopPropagation(); setToolState({ type: "flashcards", docId: doc.id }); }} title="Generate flashcards" className="p-1 text-muted-foreground hover:text-primary rounded transition-colors">
+                <BookOpen className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }} className="p-1 text-muted-foreground hover:text-destructive rounded transition-colors">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
         </div>
-        <span className="text-xs text-muted-foreground">{doc.chunkCount} chunks</span>
-      </div>
 
-      {doc.sourceUrl && (
-        <a href={doc.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-2 flex items-center gap-1 text-xs text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
-          <ExternalLink className="h-3 w-3" />View source
-        </a>
-      )}
-      <p className="text-xs text-muted-foreground mt-2">{new Date(doc.createdAt).toLocaleDateString()}</p>
-    </motion.div>
-  );
+        <h3 className={`font-semibold text-foreground text-sm mb-1 line-clamp-2 ${bulkMode ? "pl-6" : ""}`}>{doc.title}</h3>
+        <p className="text-muted-foreground text-xs line-clamp-2 mb-3">{doc.content.slice(0, 100)}...</p>
+
+        <div className="flex items-center justify-between">
+          <div className="flex flex-wrap gap-1">
+            {doc.tags.slice(0, 3).map((tag) => (
+              <span key={tag} className="px-1.5 py-0.5 bg-primary/10 text-primary text-xs rounded font-medium">{tag}</span>
+            ))}
+          </div>
+          <span className="text-xs text-muted-foreground">{doc.chunkCount} chunks</span>
+        </div>
+
+        {doc.sourceUrl && (
+          <a href={doc.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-2 flex items-center gap-1 text-xs text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
+            <ExternalLink className="h-3 w-3" />View source
+          </a>
+        )}
+        <p className="text-xs text-muted-foreground mt-2">{new Date(doc.createdAt).toLocaleDateString()}</p>
+      </motion.div>
+    );
+  };
 
   return (
     <AppLayout>
@@ -220,7 +322,16 @@ export default function Documents() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Document Library</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-foreground">
+                {activeCollection ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: activeCollection.color }} />
+                    {activeCollection.name}
+                  </span>
+                ) : "Document Library"}
+              </h1>
+            </div>
             <p className="text-muted-foreground text-sm mt-0.5">
               {docs.length} document{docs.length !== 1 ? "s" : ""} • {docs.reduce((sum, d) => sum + d.chunkCount, 0)} chunks indexed
             </p>
@@ -291,17 +402,19 @@ export default function Documents() {
 
           <div className="flex gap-2 flex-wrap">
             <button
-              onClick={() => { setFilterTag(null); setFilterCollection(null); }}
+              onClick={() => { setFilterTag(null); setLocation("/documents"); }}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${!filterTag && !filterCollection ? "bg-primary text-primary-foreground" : "bg-card border border-border text-muted-foreground hover:text-foreground"}`}
             >
               All
             </button>
-            {collectionLabel && (
+            {activeCollection && (
               <button
-                onClick={() => setFilterCollection(null)}
-                className="px-3 py-1.5 rounded-md text-xs font-medium bg-primary/10 border border-primary/30 text-primary"
+                onClick={() => setLocation("/documents")}
+                className="px-3 py-1.5 rounded-md text-xs font-medium border flex items-center gap-1.5"
+                style={{ color: activeCollection.color, borderColor: `${activeCollection.color}40`, background: `${activeCollection.color}12` }}
               >
-                {collectionLabel} ✕
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: activeCollection.color }} />
+                {activeCollection.name} ✕
               </button>
             )}
             {allTags.map((tag) => (
@@ -327,11 +440,19 @@ export default function Documents() {
           ) : docs.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-center gap-4">
               <div className="w-16 h-16 rounded-2xl bg-card border border-border flex items-center justify-center">
-                <FileText className="h-8 w-8 text-muted-foreground" />
+                {activeCollection ? (
+                  <FolderOpen className="h-8 w-8 text-muted-foreground" />
+                ) : (
+                  <FileText className="h-8 w-8 text-muted-foreground" />
+                )}
               </div>
               <div>
-                <p className="font-medium text-foreground">No documents yet</p>
-                <p className="text-muted-foreground text-sm mt-1">Upload your first document to get started</p>
+                <p className="font-medium text-foreground">
+                  {activeCollection ? `No documents in "${activeCollection.name}"` : "No documents yet"}
+                </p>
+                <p className="text-muted-foreground text-sm mt-1">
+                  {activeCollection ? "Move documents here from the library" : "Upload your first document to get started"}
+                </p>
               </div>
             </div>
           ) : (

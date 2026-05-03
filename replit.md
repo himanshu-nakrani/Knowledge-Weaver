@@ -12,7 +12,7 @@ Full-stack personal knowledge base app with adaptive RAG, AI agent traces, knowl
 - **Backend**: Express 5 + Drizzle ORM + PostgreSQL — `artifacts/api-server` → path `/api`
 - **Auth**: Replit OIDC (openid-client) — `lib/replit-auth-web` hook, cookie session stored in DB
 - **LLM**: Groq (llama-3.3-70b-versatile) — requires `GROQ_API_KEY` env var
-- **Retrieval**: In-memory BM25 chunk store (re-indexed from DB on boot) + LLM query expansion
+- **Retrieval**: In-memory BM25 chunk store (re-indexed from DB on boot) + LLM query expansion + position-based re-ranking
 - **Web search**: Tavily — optional `TAVILY_API_KEY` env var
 - **API codegen**: Orval (contract-first OpenAPI → React Query hooks + Zod schemas)
 
