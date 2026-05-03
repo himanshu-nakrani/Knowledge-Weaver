@@ -26,8 +26,10 @@ const shortcuts = [
   ]},
   { category: "UI", items: [
     { keys: ["⌘", "\\"], label: "Toggle theme (dark/light)" },
-    { keys: ["⌘", "G"], label: "Open knowledge graph" },
-    { keys: ["⌘", "A"], label: "Open AI agent" },
+  ]},
+  { category: "Navigation", items: [
+    { keys: ["⌘", "G"], label: "Jump to Knowledge Graph" },
+    { keys: ["⌘", "A"], label: "Jump to AI Agent" },
   ]},
 ];
 

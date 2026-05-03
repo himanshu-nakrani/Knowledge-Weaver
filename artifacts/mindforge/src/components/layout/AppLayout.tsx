@@ -64,6 +64,14 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
         e.preventDefault();
         toggleTheme();
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === "g") {
+        e.preventDefault();
+        window.location.pathname = (import.meta.env.BASE_URL || "/") + "knowledge-graph";
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "a") {
+        e.preventDefault();
+        window.location.pathname = (import.meta.env.BASE_URL || "/") + "agent";
+      }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);

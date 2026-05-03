@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useListDocuments } from "@workspace/api-client-react";
-import { Network, Search, Loader2, RefreshCw, Info, ChevronDown } from "lucide-react";
+import { Network, Search, Loader2, RefreshCw, Info, ChevronDown, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -98,6 +99,7 @@ export default function KnowledgeGraph() {
   const [result, setResult] = useState<GraphResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"graph" | "entities">("graph");
   const [showDocPicker, setShowDocPicker] = useState(false);
 
@@ -134,7 +136,9 @@ export default function KnowledgeGraph() {
       setResult(data);
       setActiveTab("graph");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setError(msg);
+      toast({ title: "Graph extraction failed", description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
     }

@@ -44,10 +44,11 @@ export default function Documents() {
   const [bulkMode, setBulkMode] = useState(false);
   const [shareModalDocId, setShareModalDocId] = useState<number | null>(null);
   const [shareInfo, setShareInfo] = useState<{ token: string; url: string } | null>(null);
+  const [filterCollection, setFilterCollection] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const { data: docs = [], isLoading } = useListDocuments({ search: search || undefined, tag: filterTag || undefined });
+  const { data: docs = [], isLoading } = useListDocuments({ search: search || undefined, tag: filterTag || undefined, collectionId: filterCollection || undefined });
   const deleteDoc = useDeleteDocument();
   const pinDoc = usePinDocument();
   const resolvedReader = readerDoc ? (docs.find((d) => d.id === readerDoc.id) ?? readerDoc) : null;
@@ -55,6 +56,7 @@ export default function Documents() {
   const allTags = Array.from(new Set(docs.flatMap((d) => d.tags)));
   const pinnedDocs = docs.filter((d) => d.pinned);
   const unpinnedDocs = docs.filter((d) => !d.pinned);
+  const collectionLabel = filterCollection ? `Collection #${filterCollection}` : null;
 
   const handleDelete = async (id: number) => {
     await deleteDoc.mutateAsync({ id });
@@ -91,23 +93,29 @@ export default function Documents() {
     e.stopPropagation();
     try {
       const resp = await fetch(`${BASE}/api/documents/${id}/share`, { method: "POST" });
+      if (!resp.ok) throw new Error("Share failed");
       const data = await resp.json() as { shareToken: string; shareUrl: string };
       const fullUrl = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}${data.shareUrl}`;
       setShareInfo({ token: data.shareToken, url: fullUrl });
       setShareModalDocId(id);
-    } catch {
-      toast({ title: "Share failed", variant: "destructive" });
+      toast({ title: "Share link created", description: "Copy the link to share with others" });
+    } catch (err) {
+      toast({ title: "Share failed", description: err instanceof Error ? err.message : "Unable to share document", variant: "destructive" });
     }
   };
 
   const handleBulkDelete = async () => {
-    for (const id of selectedIds) {
-      await deleteDoc.mutateAsync({ id });
+    try {
+      for (const id of selectedIds) {
+        await deleteDoc.mutateAsync({ id });
+      }
+      queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });
+      setSelectedIds(new Set());
+      setBulkMode(false);
+      toast({ title: `Deleted ${selectedIds.size} document${selectedIds.size > 1 ? "s" : ""}` });
+    } catch {
+      toast({ title: "Delete failed", variant: "destructive" });
     }
-    queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });
-    setSelectedIds(new Set());
-    setBulkMode(false);
-    toast({ title: `Deleted ${selectedIds.size} document${selectedIds.size > 1 ? "s" : ""}` });
   };
 
   const toggleSelect = (e: React.MouseEvent, id: number) => {
@@ -201,7 +209,9 @@ export default function Documents() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Document Library</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">{docs.length} documents in your knowledge base</p>
+            <p className="text-muted-foreground text-sm mt-0.5">
+              {docs.length} document{docs.length !== 1 ? "s" : ""} • {docs.reduce((sum, d) => sum + d.chunkCount, 0)} chunks indexed
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -244,11 +254,19 @@ export default function Documents() {
           </div>
           <div className="flex gap-2 flex-wrap">
             <button
-              onClick={() => setFilterTag(null)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${!filterTag ? "bg-primary text-primary-foreground" : "bg-card border border-border text-muted-foreground hover:text-foreground"}`}
+              onClick={() => { setFilterTag(null); setFilterCollection(null); }}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${!filterTag && !filterCollection ? "bg-primary text-primary-foreground" : "bg-card border border-border text-muted-foreground hover:text-foreground"}`}
             >
               All
             </button>
+            {collectionLabel && (
+              <button
+                onClick={() => setFilterCollection(null)}
+                className="px-3 py-1.5 rounded-md text-xs font-medium bg-primary/10 border border-primary/30 text-primary"
+              >
+                {collectionLabel} ✕
+              </button>
+            )}
             {allTags.map((tag) => (
               <button
                 key={tag}

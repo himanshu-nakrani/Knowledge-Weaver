@@ -96,18 +96,19 @@ export function CommandPalette({ onSelectSession, onQuickNote }: CommandPaletteP
         {/* Navigation */}
         <CommandGroup heading="Navigate">
           {[
-            { label: "Workspace", href: "/", icon: Brain },
+            { label: "Workspace", href: "/", icon: Brain, shortcut: "⌘/" },
             { label: "Document Library", href: "/documents", icon: FileText },
             { label: "Flashcard Decks", href: "/flashcards", icon: BookOpen },
-            { label: "Knowledge Graph", href: "/knowledge-graph", icon: Network },
-            { label: "AI Agent", href: "/agent", icon: Bot },
+            { label: "Knowledge Graph", href: "/knowledge-graph", icon: Network, shortcut: "⌘G" },
+            { label: "AI Agent", href: "/agent", icon: Bot, shortcut: "⌘A" },
             { label: "Evaluation", href: "/eval", icon: ActivitySquare },
             { label: "Settings", href: "/settings", icon: Settings },
             { label: "Trash", href: "/trash", icon: Trash },
-          ].map(({ label, href, icon: Icon }) => (
+          ].map(({ label, href, icon: Icon, shortcut }) => (
             <CommandItem key={href} onSelect={() => run(() => navigate(href))}>
               <Icon className="h-4 w-4 mr-2 text-muted-foreground" />
-              {label}
+              <span className="flex-1">{label}</span>
+              {shortcut && <span className="ml-auto text-xs text-muted-foreground">{shortcut}</span>}
             </CommandItem>
           ))}
         </CommandGroup>

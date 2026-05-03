@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Bot, Send, Loader2, CheckCircle2, Circle, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
+import { Bot, Send, Loader2, CheckCircle2, Circle, ChevronDown, ChevronRight, ExternalLink, AlertCircle, Copy, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -109,8 +110,10 @@ let runCounter = 0;
 export default function Agent() {
   const [input, setInput] = useState("");
   const [runs, setRuns] = useState<AgentRun[]>([]);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -169,6 +172,7 @@ export default function Agent() {
     eventSource.onerror = () => {
       updateRun((r) => ({ ...r, running: false }));
       eventSource.close();
+      toast({ title: "Agent failed", description: "Unable to complete reasoning trace", variant: "destructive" });
     };
   };
 
@@ -177,6 +181,12 @@ export default function Agent() {
       e.preventDefault();
       runAgent();
     }
+  };
+
+  const handleCopyAnswer = (answer: string, runId: number) => {
+    navigator.clipboard.writeText(answer);
+    setCopiedId(runId);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   const activeRun = runs[runs.length - 1];
@@ -251,19 +261,35 @@ export default function Agent() {
                   </div>
                 </div>
 
-                {/* Sources */}
-                {run.sources.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {run.usedWebSearch && (
-                      <span className="flex items-center gap-1 text-xs text-cyan-400 bg-cyan-400/10 border border-cyan-400/20 px-2 py-1 rounded-full">
-                        <ExternalLink className="h-3 w-3" /> Web search used
-                      </span>
+                {/* Answer + Sources */}
+                {run.answer && (
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 bg-primary/5 border border-primary/20 rounded-lg p-3">
+                        <p className="text-sm text-foreground leading-relaxed">{run.answer}</p>
+                      </div>
+                      <button
+                        onClick={() => handleCopyAnswer(run.answer!, run.id)}
+                        className="p-2 text-muted-foreground hover:text-foreground hover:bg-card rounded transition-colors shrink-0"
+                        title="Copy answer"
+                      >
+                        {copiedId === run.id ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    {run.sources.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {run.usedWebSearch && (
+                          <span className="flex items-center gap-1 text-xs text-cyan-400 bg-cyan-400/10 border border-cyan-400/20 px-2 py-1 rounded-full">
+                            <ExternalLink className="h-3 w-3" /> Web search
+                          </span>
+                        )}
+                        {run.sources.slice(0, 3).map((s, i) => (
+                          <span key={i} className="text-xs text-muted-foreground bg-card border border-border px-2 py-1 rounded-full">
+                            [{i + 1}] {s.documentTitle}
+                          </span>
+                        ))}
+                      </div>
                     )}
-                    {run.sources.slice(0, 3).map((s, i) => (
-                      <span key={i} className="text-xs text-muted-foreground bg-card border border-border px-2 py-1 rounded-full">
-                        [{i + 1}] {s.documentTitle}
-                      </span>
-                    ))}
                   </div>
                 )}
               </motion.div>
