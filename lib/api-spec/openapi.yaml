@@ -21,6 +21,14 @@ tags:
     description: Evaluation and debug panel
   - name: stats
     description: Knowledge base statistics
+  - name: collections
+    description: Collections and folders for organizing documents
+  - name: knowledge
+    description: Knowledge graph and entity extraction
+  - name: agent
+    description: AI agent with multi-step reasoning traces
+  - name: sharing
+    description: Document sharing via public links
 paths:
   /healthz:
     get:
@@ -50,6 +58,11 @@ paths:
           name: tag
           schema:
             type: string
+          required: false
+        - in: query
+          name: collectionId
+          schema:
+            type: integer
           required: false
       responses:
         "200":
@@ -196,6 +209,239 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Chunk"
+
+  /documents/{id}/pin:
+    patch:
+      operationId: pinDocument
+      tags: [documents]
+      summary: Toggle pin on a document
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
+  /documents/{id}/restore:
+    patch:
+      operationId: restoreDocument
+      tags: [documents]
+      summary: Restore a soft-deleted document from trash
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
+  /documents/{id}/duplicate:
+    post:
+      operationId: duplicateDocument
+      tags: [documents]
+      summary: Duplicate a document
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Duplicated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+
+  /documents/{id}/share:
+    post:
+      operationId: shareDocument
+      tags: [sharing]
+      summary: Generate or retrieve a public share token for a document
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Share info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareResult"
+    delete:
+      operationId: unshareDocument
+      tags: [sharing]
+      summary: Revoke the share token for a document
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Share token revoked
+
+  /share/{token}:
+    get:
+      operationId: getSharedDocument
+      tags: [sharing]
+      summary: Get a publicly shared document by token (no auth required)
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Shared document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+        "404":
+          description: Not found
+
+  /documents/trash:
+    get:
+      operationId: listTrashDocuments
+      tags: [documents]
+      summary: List soft-deleted documents
+      responses:
+        "200":
+          description: Trash documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Document"
+
+  /collections:
+    get:
+      operationId: listCollections
+      tags: [collections]
+      summary: List all collections with document counts
+      responses:
+        "200":
+          description: Collections
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Collection"
+    post:
+      operationId: createCollection
+      tags: [collections]
+      summary: Create a new collection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCollectionBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Collection"
+
+  /collections/{id}:
+    patch:
+      operationId: updateCollection
+      tags: [collections]
+      summary: Update a collection
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCollectionBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Collection"
+    delete:
+      operationId: deleteCollection
+      tags: [collections]
+      summary: Delete a collection (documents are unassigned, not deleted)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /knowledge-graph:
+    post:
+      operationId: buildKnowledgeGraph
+      tags: [knowledge]
+      summary: Extract a knowledge graph from selected documents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KnowledgeGraphBody"
+      responses:
+        "200":
+          description: Knowledge graph result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeGraphResult"
+
+  /agent/run:
+    get:
+      operationId: runAgent
+      tags: [agent]
+      summary: Run the multi-step AI agent with SSE streaming trace
+      parameters:
+        - in: query
+          name: content
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: SSE stream of agent steps
+          content:
+            text/event-stream:
+              schema:
+                type: string
 
   /chat/sessions:
     get:
@@ -400,59 +646,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/GetCurrentAuthUserResponse"
 
-  /documents/{id}/pin:
-    patch:
-      operationId: pinDocument
-      tags: [documents]
-      summary: Toggle pin on a document
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Document"
-
-  /documents/{id}/restore:
-    patch:
-      operationId: restoreDocument
-      tags: [documents]
-      summary: Restore a soft-deleted document from trash
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Restored
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Document"
-
-  /documents/trash:
-    get:
-      operationId: listTrashDocuments
-      tags: [documents]
-      summary: List soft-deleted documents
-      responses:
-        "200":
-          description: Trash documents
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Document"
-
   /export:
     get:
       operationId: exportAllData
@@ -534,6 +727,10 @@ components:
           type: ["string", "null"]
         pinned:
           type: boolean
+        collectionId:
+          type: ["integer", "null"]
+        shareToken:
+          type: ["string", "null"]
         deletedAt:
           type: ["string", "null"]
         createdAt:
@@ -549,9 +746,118 @@ components:
         - chunkCount
         - sourceUrl
         - pinned
+        - collectionId
+        - shareToken
         - deletedAt
         - createdAt
         - updatedAt
+
+    Collection:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        color:
+          type: string
+        icon:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        documentCount:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - name
+        - color
+        - icon
+        - description
+        - documentCount
+        - createdAt
+        - updatedAt
+
+    CreateCollectionBody:
+      type: object
+      properties:
+        name:
+          type: string
+        color:
+          type: string
+        icon:
+          type: string
+        description:
+          type: string
+      required:
+        - name
+
+    UpdateCollectionBody:
+      type: object
+      properties:
+        name:
+          type: string
+        color:
+          type: string
+        icon:
+          type: string
+        description:
+          type: string
+
+    ShareResult:
+      type: object
+      properties:
+        shareToken:
+          type: string
+        shareUrl:
+          type: string
+      required:
+        - shareToken
+        - shareUrl
+
+    KnowledgeGraphBody:
+      type: object
+      properties:
+        documentIds:
+          type: array
+          items:
+            type: integer
+        query:
+          type: string
+      required:
+        - documentIds
+
+    KnowledgeGraphResult:
+      type: object
+      properties:
+        mermaid:
+          type: string
+        entities:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              type:
+                type: string
+              mentions:
+                type: integer
+            required: [name, type, mentions]
+        documentCount:
+          type: integer
+        documentTitles:
+          type: array
+          items:
+            type: string
+      required:
+        - mermaid
+        - entities
+        - documentCount
+        - documentTitles
 
     AuthUser:
       type: object
@@ -664,6 +970,8 @@ components:
           type: array
           items:
             type: string
+        collectionId:
+          type: ["integer", "null"]
 
     IngestGithubBody:
       type: object

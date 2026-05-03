@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import {
   Brain, FileText, Settings, ActivitySquare, Menu,
   MessageSquare, Plus, Trash2, BookOpen, StickyNote,
-  LogIn, LogOut, User, Trash,
+  LogIn, LogOut, User, Trash, Network, Bot, Sun, Moon, Keyboard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -11,7 +11,9 @@ import { useDeleteChatSession, getListChatSessionsQueryKey } from "@workspace/ap
 import { useQueryClient } from "@tanstack/react-query";
 import { CommandPalette } from "@/components/CommandPalette";
 import { QuickNoteModal } from "@/components/QuickNoteModal";
+import { ShortcutsModal } from "@/components/ShortcutsModal";
 import { useAuth } from "@workspace/replit-auth-web";
+import { useTheme } from "@/hooks/useTheme";
 
 interface ChatSession {
   id: number;
@@ -33,6 +35,8 @@ const navItems = [
   { href: "/", icon: Brain, label: "Workspace" },
   { href: "/documents", icon: FileText, label: "Library" },
   { href: "/flashcards", icon: BookOpen, label: "Flashcards" },
+  { href: "/knowledge-graph", icon: Network, label: "Knowledge Graph" },
+  { href: "/agent", icon: Bot, label: "AI Agent" },
   { href: "/eval", icon: ActivitySquare, label: "Evaluation" },
   { href: "/settings", icon: Settings, label: "Settings" },
 ];
@@ -42,7 +46,9 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
   const queryClient = useQueryClient();
   const deleteSession = useDeleteChatSession();
   const [showNote, setShowNote] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const { user, isLoading: authLoading, login, logout } = useAuth();
+  const { theme, toggle: toggleTheme } = useTheme();
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -50,10 +56,18 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
         e.preventDefault();
         setShowNote(true);
       }
+      if (e.key === "?" && !e.metaKey && !e.ctrlKey && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+        setShowShortcuts(true);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
+        e.preventDefault();
+        toggleTheme();
+      }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, []);
+  }, [toggleTheme]);
 
   const handleDeleteSession = async (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
@@ -76,7 +90,7 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
           <span className="font-bold text-base text-foreground tracking-tight">MindForge</span>
           <div className="flex items-center gap-1">
             <kbd className="text-[10px] text-muted-foreground border border-border rounded px-1 py-0.5 font-mono">⌘K</kbd>
-            <kbd className="text-[10px] text-muted-foreground border border-border rounded px-1 py-0.5 font-mono">⌘N</kbd>
+            <kbd className="text-[10px] text-muted-foreground border border-border rounded px-1 py-0.5 font-mono">?</kbd>
           </div>
         </div>
       </div>
@@ -168,8 +182,28 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
         </div>
       )}
 
-      {/* User profile / Login */}
-      <div className="border-t border-border p-3">
+      {/* Bottom controls + User */}
+      <div className="border-t border-border p-3 space-y-2">
+        {/* Theme + Shortcuts row */}
+        <div className="hidden lg:flex items-center gap-1">
+          <button
+            onClick={toggleTheme}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            className="flex-1 flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors"
+          >
+            {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+            <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+          </button>
+          <button
+            onClick={() => setShowShortcuts(true)}
+            title="Keyboard shortcuts (?)"
+            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors"
+          >
+            <Keyboard className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {/* User profile / Login */}
         {authLoading ? (
           <div className="h-8 bg-muted/30 rounded-lg animate-pulse" />
         ) : user ? (
@@ -209,6 +243,7 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
     <div className="flex h-screen w-full bg-background overflow-hidden">
       <CommandPalette onSelectSession={onSelectSession} onQuickNote={() => setShowNote(true)} />
       {showNote && <QuickNoteModal onClose={() => setShowNote(false)} />}
+      {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
 
       {/* Desktop sidebar */}
       <div className="hidden md:flex h-full w-[60px] lg:w-[220px] shrink-0">
@@ -235,6 +270,9 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
           <kbd className="text-[10px] text-muted-foreground border border-border rounded px-1.5 py-0.5 font-mono">⌘K</kbd>
           <button onClick={() => setShowNote(true)} className="p-1.5 text-muted-foreground hover:text-amber-400 transition-colors rounded">
             <StickyNote className="h-4 w-4" />
+          </button>
+          <button onClick={toggleTheme} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors rounded">
+            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
           {!authLoading && !user && (
             <button onClick={login} className="p-1.5 text-muted-foreground hover:text-primary transition-colors rounded">

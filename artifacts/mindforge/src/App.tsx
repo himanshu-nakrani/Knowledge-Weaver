@@ -9,6 +9,9 @@ import Flashcards from "@/pages/Flashcards";
 import Eval from "@/pages/Eval";
 import Settings from "@/pages/Settings";
 import Trash from "@/pages/Trash";
+import KnowledgeGraph from "@/pages/KnowledgeGraph";
+import Agent from "@/pages/Agent";
+import SharedDocument from "@/pages/SharedDocument";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,6 +31,9 @@ function Router() {
       <Route path="/eval" component={Eval} />
       <Route path="/settings" component={Settings} />
       <Route path="/trash" component={Trash} />
+      <Route path="/knowledge-graph" component={KnowledgeGraph} />
+      <Route path="/agent" component={Agent} />
+      <Route path="/share/:token" component={SharedDocument} />
       <Route component={NotFound} />
     </Switch>
   );

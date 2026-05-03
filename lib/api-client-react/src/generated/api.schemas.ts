@@ -34,9 +34,63 @@ export interface Document {
   sourceUrl: string | null;
   pinned: boolean;
   /** @nullable */
+  collectionId: number | null;
+  /** @nullable */
+  shareToken: string | null;
+  /** @nullable */
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Collection {
+  id: number;
+  name: string;
+  color: string;
+  /** @nullable */
+  icon: string | null;
+  /** @nullable */
+  description: string | null;
+  documentCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCollectionBody {
+  name: string;
+  color?: string;
+  icon?: string;
+  description?: string;
+}
+
+export interface UpdateCollectionBody {
+  name?: string;
+  color?: string;
+  icon?: string;
+  description?: string;
+}
+
+export interface ShareResult {
+  shareToken: string;
+  shareUrl: string;
+}
+
+export interface KnowledgeGraphBody {
+  documentIds: number[];
+  query?: string;
+}
+
+export type KnowledgeGraphResultEntitiesItem = {
+  name: string;
+  type: string;
+  mentions: number;
+};
+
+export interface KnowledgeGraphResult {
+  mermaid: string;
+  entities: KnowledgeGraphResultEntitiesItem[];
+  documentCount: number;
+  documentTitles: string[];
 }
 
 export interface AuthUser {
@@ -106,6 +160,8 @@ export interface UpdateDocumentBody {
   /** @nullable */
   title?: string | null;
   tags?: string[];
+  /** @nullable */
+  collectionId?: number | null;
 }
 
 export interface IngestGithubBody {
@@ -232,6 +288,11 @@ export interface ActivityItem {
 export type ListDocumentsParams = {
   search?: string;
   tag?: string;
+  collectionId?: number;
+};
+
+export type RunAgentParams = {
+  content: string;
 };
 
 export type GetRetrievedChunksParams = {

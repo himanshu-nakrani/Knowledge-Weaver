@@ -20,6 +20,7 @@ export const HealthCheckResponse = zod.object({
 export const ListDocumentsQueryParams = zod.object({
   search: zod.coerce.string().optional(),
   tag: zod.coerce.string().optional(),
+  collectionId: zod.coerce.number().optional(),
 });
 
 export const ListDocumentsResponseItem = zod.object({
@@ -31,6 +32,8 @@ export const ListDocumentsResponseItem = zod.object({
   chunkCount: zod.number(),
   sourceUrl: zod.string().nullable(),
   pinned: zod.boolean(),
+  collectionId: zod.number().nullable(),
+  shareToken: zod.string().nullable(),
   deletedAt: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -63,6 +66,8 @@ export const GetDocumentResponse = zod.object({
   chunkCount: zod.number(),
   sourceUrl: zod.string().nullable(),
   pinned: zod.boolean(),
+  collectionId: zod.number().nullable(),
+  shareToken: zod.string().nullable(),
   deletedAt: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -78,6 +83,7 @@ export const UpdateDocumentParams = zod.object({
 export const UpdateDocumentBody = zod.object({
   title: zod.string().nullish(),
   tags: zod.array(zod.string()).optional(),
+  collectionId: zod.number().nullish(),
 });
 
 export const UpdateDocumentResponse = zod.object({
@@ -89,6 +95,8 @@ export const UpdateDocumentResponse = zod.object({
   chunkCount: zod.number(),
   sourceUrl: zod.string().nullable(),
   pinned: zod.boolean(),
+  collectionId: zod.number().nullable(),
+  shareToken: zod.string().nullable(),
   deletedAt: zod.string().nullable(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -126,6 +134,208 @@ export const GetDocumentChunksResponseItem = zod.object({
 export const GetDocumentChunksResponse = zod.array(
   GetDocumentChunksResponseItem,
 );
+
+/**
+ * @summary Toggle pin on a document
+ */
+export const PinDocumentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const PinDocumentResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  type: zod.enum(["pdf", "markdown", "text", "github", "url"]),
+  content: zod.string(),
+  tags: zod.array(zod.string()),
+  chunkCount: zod.number(),
+  sourceUrl: zod.string().nullable(),
+  pinned: zod.boolean(),
+  collectionId: zod.number().nullable(),
+  shareToken: zod.string().nullable(),
+  deletedAt: zod.string().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Restore a soft-deleted document from trash
+ */
+export const RestoreDocumentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const RestoreDocumentResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  type: zod.enum(["pdf", "markdown", "text", "github", "url"]),
+  content: zod.string(),
+  tags: zod.array(zod.string()),
+  chunkCount: zod.number(),
+  sourceUrl: zod.string().nullable(),
+  pinned: zod.boolean(),
+  collectionId: zod.number().nullable(),
+  shareToken: zod.string().nullable(),
+  deletedAt: zod.string().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Duplicate a document
+ */
+export const DuplicateDocumentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Generate or retrieve a public share token for a document
+ */
+export const ShareDocumentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ShareDocumentResponse = zod.object({
+  shareToken: zod.string(),
+  shareUrl: zod.string(),
+});
+
+/**
+ * @summary Revoke the share token for a document
+ */
+export const UnshareDocumentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Get a publicly shared document by token (no auth required)
+ */
+export const GetSharedDocumentParams = zod.object({
+  token: zod.coerce.string(),
+});
+
+export const GetSharedDocumentResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  type: zod.enum(["pdf", "markdown", "text", "github", "url"]),
+  content: zod.string(),
+  tags: zod.array(zod.string()),
+  chunkCount: zod.number(),
+  sourceUrl: zod.string().nullable(),
+  pinned: zod.boolean(),
+  collectionId: zod.number().nullable(),
+  shareToken: zod.string().nullable(),
+  deletedAt: zod.string().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary List soft-deleted documents
+ */
+export const ListTrashDocumentsResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  type: zod.enum(["pdf", "markdown", "text", "github", "url"]),
+  content: zod.string(),
+  tags: zod.array(zod.string()),
+  chunkCount: zod.number(),
+  sourceUrl: zod.string().nullable(),
+  pinned: zod.boolean(),
+  collectionId: zod.number().nullable(),
+  shareToken: zod.string().nullable(),
+  deletedAt: zod.string().nullable(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const ListTrashDocumentsResponse = zod.array(
+  ListTrashDocumentsResponseItem,
+);
+
+/**
+ * @summary List all collections with document counts
+ */
+export const ListCollectionsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  color: zod.string(),
+  icon: zod.string().nullable(),
+  description: zod.string().nullable(),
+  documentCount: zod.number(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const ListCollectionsResponse = zod.array(ListCollectionsResponseItem);
+
+/**
+ * @summary Create a new collection
+ */
+export const CreateCollectionBody = zod.object({
+  name: zod.string(),
+  color: zod.string().optional(),
+  icon: zod.string().optional(),
+  description: zod.string().optional(),
+});
+
+/**
+ * @summary Update a collection
+ */
+export const UpdateCollectionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateCollectionBody = zod.object({
+  name: zod.string().optional(),
+  color: zod.string().optional(),
+  icon: zod.string().optional(),
+  description: zod.string().optional(),
+});
+
+export const UpdateCollectionResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  color: zod.string(),
+  icon: zod.string().nullable(),
+  description: zod.string().nullable(),
+  documentCount: zod.number(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Delete a collection (documents are unassigned, not deleted)
+ */
+export const DeleteCollectionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Extract a knowledge graph from selected documents
+ */
+export const BuildKnowledgeGraphBody = zod.object({
+  documentIds: zod.array(zod.number()),
+  query: zod.string().optional(),
+});
+
+export const BuildKnowledgeGraphResponse = zod.object({
+  mermaid: zod.string(),
+  entities: zod.array(
+    zod.object({
+      name: zod.string(),
+      type: zod.string(),
+      mentions: zod.number(),
+    }),
+  ),
+  documentCount: zod.number(),
+  documentTitles: zod.array(zod.string()),
+});
+
+/**
+ * @summary Run the multi-step AI agent with SSE streaming trace
+ */
+export const RunAgentQueryParams = zod.object({
+  content: zod.coerce.string(),
+});
 
 /**
  * @summary List chat sessions
@@ -308,68 +518,6 @@ export const GetCurrentAuthUserResponse = zod.object({
 });
 
 /**
- * @summary Toggle pin on a document
- */
-export const PinDocumentParams = zod.object({
-  id: zod.coerce.number(),
-});
-
-export const PinDocumentResponse = zod.object({
-  id: zod.number(),
-  title: zod.string(),
-  type: zod.enum(["pdf", "markdown", "text", "github", "url"]),
-  content: zod.string(),
-  tags: zod.array(zod.string()),
-  chunkCount: zod.number(),
-  sourceUrl: zod.string().nullable(),
-  pinned: zod.boolean(),
-  deletedAt: zod.string().nullable(),
-  createdAt: zod.string(),
-  updatedAt: zod.string(),
-});
-
-/**
- * @summary Restore a soft-deleted document from trash
- */
-export const RestoreDocumentParams = zod.object({
-  id: zod.coerce.number(),
-});
-
-export const RestoreDocumentResponse = zod.object({
-  id: zod.number(),
-  title: zod.string(),
-  type: zod.enum(["pdf", "markdown", "text", "github", "url"]),
-  content: zod.string(),
-  tags: zod.array(zod.string()),
-  chunkCount: zod.number(),
-  sourceUrl: zod.string().nullable(),
-  pinned: zod.boolean(),
-  deletedAt: zod.string().nullable(),
-  createdAt: zod.string(),
-  updatedAt: zod.string(),
-});
-
-/**
- * @summary List soft-deleted documents
- */
-export const ListTrashDocumentsResponseItem = zod.object({
-  id: zod.number(),
-  title: zod.string(),
-  type: zod.enum(["pdf", "markdown", "text", "github", "url"]),
-  content: zod.string(),
-  tags: zod.array(zod.string()),
-  chunkCount: zod.number(),
-  sourceUrl: zod.string().nullable(),
-  pinned: zod.boolean(),
-  deletedAt: zod.string().nullable(),
-  createdAt: zod.string(),
-  updatedAt: zod.string(),
-});
-export const ListTrashDocumentsResponse = zod.array(
-  ListTrashDocumentsResponseItem,
-);
-
-/**
  * @summary Export all user data as a JSON bundle
  */
 export const ExportAllDataResponse = zod.object({
@@ -384,6 +532,8 @@ export const ExportAllDataResponse = zod.object({
       chunkCount: zod.number(),
       sourceUrl: zod.string().nullable(),
       pinned: zod.boolean(),
+      collectionId: zod.number().nullable(),
+      shareToken: zod.string().nullable(),
       deletedAt: zod.string().nullable(),
       createdAt: zod.string(),
       updatedAt: zod.string(),

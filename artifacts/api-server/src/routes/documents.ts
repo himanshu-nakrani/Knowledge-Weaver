@@ -17,6 +17,7 @@ import { addChunks, removeChunks, getChunksForDocument } from "../lib/vectorStor
 import { scrapeGithubRepo } from "../lib/github";
 import { parsePdfBuffer } from "../lib/pdfParser";
 import { scrapeWebPage } from "../lib/webScraper";
+import crypto from "node:crypto";
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
@@ -28,6 +29,8 @@ function formatDoc(doc: typeof documentsTable.$inferSelect, chunkCount: number) 
     chunkCount,
     sourceUrl: doc.sourceUrl ?? null,
     pinned: doc.pinned ?? false,
+    collectionId: doc.collectionId ?? null,
+    shareToken: doc.shareToken ?? null,
     deletedAt: doc.deletedAt ? doc.deletedAt.toISOString() : null,
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
@@ -61,6 +64,10 @@ router.get("/documents", async (req, res): Promise<void> => {
   if (params.data.tag) {
     const tag = params.data.tag.toLowerCase();
     result = result.filter((d) => d.tags.some((t) => t.toLowerCase() === tag));
+  }
+  if (params.data.collectionId) {
+    const cid = Number(params.data.collectionId);
+    result = result.filter((d) => d.collectionId === cid);
   }
 
   res.json(result.map((d) => formatDoc(d, getChunksForDocument(d.id).length)));
@@ -200,6 +207,7 @@ router.patch("/documents/:id", async (req, res): Promise<void> => {
   const updateData: Record<string, unknown> = {};
   if (parsed.data.title != null) updateData.title = parsed.data.title;
   if (parsed.data.tags != null) updateData.tags = parsed.data.tags;
+  if ("collectionId" in req.body) updateData.collectionId = req.body.collectionId ?? null;
 
   const [doc] = await db
     .update(documentsTable)
@@ -235,6 +243,82 @@ router.patch("/documents/:id/restore", async (req, res): Promise<void> => {
     .returning();
   if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
   await db.insert(activityTable).values({ type: "document_added", description: `Document "${doc.title}" restored from trash` });
+  res.json(formatDoc(doc, getChunksForDocument(doc.id).length));
+});
+
+/** Generate or return share token */
+router.post("/documents/:id/share", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [current] = await db.select().from(documentsTable).where(eq(documentsTable.id, id));
+  if (!current) { res.status(404).json({ error: "Document not found" }); return; }
+
+  if (current.shareToken) {
+    res.json({ shareToken: current.shareToken, shareUrl: `/share/${current.shareToken}` });
+    return;
+  }
+
+  const token = crypto.randomBytes(16).toString("hex");
+  await db.update(documentsTable).set({ shareToken: token }).where(eq(documentsTable.id, id));
+  res.json({ shareToken: token, shareUrl: `/share/${token}` });
+});
+
+/** Remove share token */
+router.delete("/documents/:id/share", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  await db.update(documentsTable).set({ shareToken: null }).where(eq(documentsTable.id, id));
+  res.sendStatus(204);
+});
+
+/** Duplicate a document */
+router.post("/documents/:id/duplicate", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [original] = await db.select().from(documentsTable).where(eq(documentsTable.id, id));
+  if (!original) { res.status(404).json({ error: "Document not found" }); return; }
+
+  const chunks = chunkText(original.content);
+  const [copy] = await db
+    .insert(documentsTable)
+    .values({
+      title: `${original.title} (copy)`,
+      content: original.content,
+      type: original.type,
+      tags: original.tags,
+      chunkCount: chunks.length,
+      sourceUrl: original.sourceUrl,
+      collectionId: original.collectionId,
+    })
+    .returning();
+
+  addChunks(copy.id, chunks);
+
+  await db.insert(activityTable).values({
+    type: "document_added",
+    description: `Document "${original.title}" duplicated`,
+  });
+
+  res.status(201).json(formatDoc(copy, chunks.length));
+});
+
+/** Public shared document view — no auth required */
+router.get("/share/:token", async (req, res): Promise<void> => {
+  const token = req.params.token;
+  if (!token) { res.status(400).json({ error: "Invalid token" }); return; }
+
+  const [doc] = await db
+    .select()
+    .from(documentsTable)
+    .where(eq(documentsTable.shareToken, token));
+
+  if (!doc || doc.deletedAt) {
+    res.status(404).json({ error: "Shared document not found or no longer available" });
+    return;
+  }
+
   res.json(formatDoc(doc, getChunksForDocument(doc.id).length));
 });
 

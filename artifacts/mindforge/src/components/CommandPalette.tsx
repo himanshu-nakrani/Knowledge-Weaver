@@ -11,7 +11,8 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import { Brain, FileText, MessageSquare, Plus, Settings, ActivitySquare, BookOpen, File, Github, Globe, StickyNote, Trash } from "lucide-react";
+import { Brain, FileText, MessageSquare, Plus, Settings, ActivitySquare, BookOpen, File, Github, Globe, StickyNote, Trash, Network, Bot, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/hooks/useTheme";
 
 const typeIcons: Record<string, React.ReactNode> = {
   pdf: <File className="h-4 w-4 text-orange-400" />,
@@ -30,6 +31,7 @@ export function CommandPalette({ onSelectSession, onQuickNote }: CommandPaletteP
   const [open, setOpen] = useState(false);
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
+  const { theme, toggle: toggleTheme } = useTheme();
 
   const { data: docs = [] } = useListDocuments();
   const { data: sessions = [] } = useListChatSessions();
@@ -82,6 +84,11 @@ export function CommandPalette({ onSelectSession, onQuickNote }: CommandPaletteP
             <Plus className="h-4 w-4 mr-2 text-green-400" />
             Upload document
           </CommandItem>
+          <CommandItem onSelect={() => run(() => toggleTheme())}>
+            {theme === "dark" ? <Sun className="h-4 w-4 mr-2 text-yellow-400" /> : <Moon className="h-4 w-4 mr-2 text-blue-400" />}
+            Toggle {theme === "dark" ? "light" : "dark"} mode
+            <span className="ml-auto text-xs text-muted-foreground font-mono">⌘\</span>
+          </CommandItem>
         </CommandGroup>
 
         <CommandSeparator />
@@ -92,6 +99,8 @@ export function CommandPalette({ onSelectSession, onQuickNote }: CommandPaletteP
             { label: "Workspace", href: "/", icon: Brain },
             { label: "Document Library", href: "/documents", icon: FileText },
             { label: "Flashcard Decks", href: "/flashcards", icon: BookOpen },
+            { label: "Knowledge Graph", href: "/knowledge-graph", icon: Network },
+            { label: "AI Agent", href: "/agent", icon: Bot },
             { label: "Evaluation", href: "/eval", icon: ActivitySquare },
             { label: "Settings", href: "/settings", icon: Settings },
             { label: "Trash", href: "/trash", icon: Trash },

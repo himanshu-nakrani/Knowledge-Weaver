@@ -3,3 +3,4 @@ export * from "./chat";
 export * from "./activity";
 export * from "./flashcards";
 export * from "./auth";
+export * from "./collections";

@@ -98,3 +98,35 @@ export function shouldUseWebSearch(query: string, hasRelevantDocs: boolean): boo
   const hasWebKeyword = webKeywords.some((kw) => query.toLowerCase().includes(kw));
   return hasWebKeyword || !hasRelevantDocs;
 }
+
+/**
+ * Expands a user query into multiple semantically related search terms
+ * to improve BM25 recall. Returns the original query plus synonyms/related terms.
+ */
+export async function expandQuery(query: string): Promise<string> {
+  if (!process.env.GROQ_API_KEY) return query;
+
+  try {
+    const prompt = `Given this search query, generate 3-5 alternative phrasings and related terms that would help find relevant documents. Keep each variation concise.
+
+Query: "${query}"
+
+Respond with ONLY a single line of comma-separated terms (no labels, no bullet points, no extra text):`;
+
+    const expanded = await chatCompletion(
+      [{ role: "user", content: prompt }],
+      0.3,
+      150
+    );
+
+    const terms = expanded
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0)
+      .slice(0, 5);
+
+    return [query, ...terms].join(" ");
+  } catch {
+    return query;
+  }
+}

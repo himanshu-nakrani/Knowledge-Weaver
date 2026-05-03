@@ -19,6 +19,7 @@ import {
   chatCompletionStream,
   tavilySearch,
   shouldUseWebSearch,
+  expandQuery,
 } from "../lib/groq";
 import { logger } from "../lib/logger";
 import { setLastEval } from "../lib/evalStore";
@@ -104,7 +105,8 @@ router.delete("/chat/sessions/:id", async (req, res): Promise<void> => {
 
 /** Shared: build retrieval context and system prompt */
 async function buildChatContext(sessionId: number, userContent: string) {
-  const retrievedChunks = await similaritySearch(userContent, 5);
+  const expandedQuery = await expandQuery(userContent);
+  const retrievedChunks = await similaritySearch(expandedQuery, 5);
   const hasRelevantDocs = retrievedChunks.length > 0 && retrievedChunks[0].score > 0.2;
   const useWebSearch = shouldUseWebSearch(userContent, hasRelevantDocs);
   let webContext = "";

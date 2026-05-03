@@ -2,6 +2,8 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 
-document.documentElement.classList.add("dark");
+const saved = localStorage.getItem("mindforge-theme");
+const theme = saved === "light" ? "light" : "dark";
+document.documentElement.classList.add(theme);
 
 createRoot(document.getElementById("root")!).render(<App />);
