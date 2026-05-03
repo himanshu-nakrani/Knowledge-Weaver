@@ -141,6 +141,32 @@ Summary:`;
 }
 
 /**
+ * Generates a structured outline / table of contents for a document.
+ */
+export async function generateOutline(title: string, content: string): Promise<{ level: number; heading: string; summary: string }[]> {
+  if (!process.env.GROQ_API_KEY) {
+    return [{ level: 1, heading: "Document Outline", summary: "Set GROQ_API_KEY to enable AI-powered outlines." }];
+  }
+  const snippet = content.slice(0, 4000);
+  const prompt = `Extract a structured outline (table of contents) from this document. Return JSON only.
+
+Title: "${title}"
+Content: "${snippet}"
+
+Return a JSON array of objects with keys: level (1=h1, 2=h2, 3=h3), heading (section title), summary (1-sentence description).
+Example: [{"level":1,"heading":"Introduction","summary":"Overview of the topic."}]
+Return ONLY valid JSON, no markdown, no extra text:`;
+  try {
+    const result = await chatCompletion([{ role: "user", content: prompt }], 0.2, 600);
+    const cleaned = result.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+    const parsed = JSON.parse(cleaned) as { level: number; heading: string; summary: string }[];
+    return Array.isArray(parsed) ? parsed.slice(0, 20) : [];
+  } catch {
+    return [{ level: 1, heading: title, summary: "Could not extract outline — try again." }];
+  }
+}
+
+/**
  * Expands a user query into multiple semantically related search terms
  * to improve BM25 recall. Returns the original query plus synonyms/related terms.
  */

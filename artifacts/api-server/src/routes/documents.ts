@@ -17,11 +17,33 @@ import { addChunks, removeChunks, getChunksForDocument, similaritySearch } from 
 import { scrapeGithubRepo } from "../lib/github";
 import { parsePdfBuffer } from "../lib/pdfParser";
 import { scrapeWebPage } from "../lib/webScraper";
-import { extractTags, generateSummary } from "../lib/groq";
+import { extractTags, generateSummary, generateOutline } from "../lib/groq";
 import crypto from "node:crypto";
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+
+/** Parse a search string with DSL tokens like tag:ai type:pdf before:2025-01-01 */
+function parseSearchDSL(raw: string) {
+  const tags: string[] = [];
+  const types: string[] = [];
+  let before: Date | null = null;
+  let after: Date | null = null;
+
+  const tagRe = /\btag:(\S+)/g;
+  const typeRe = /\btype:(\S+)/g;
+  const beforeRe = /\bbefore:(\S+)/g;
+  const afterRe = /\bafter:(\S+)/g;
+
+  let m: RegExpExecArray | null;
+  while ((m = tagRe.exec(raw)) !== null) tags.push(m[1].toLowerCase());
+  while ((m = typeRe.exec(raw)) !== null) types.push(m[1].toLowerCase());
+  while ((m = beforeRe.exec(raw)) !== null) { const d = new Date(m[1]); if (!isNaN(d.getTime())) before = d; }
+  while ((m = afterRe.exec(raw)) !== null) { const d = new Date(m[1]); if (!isNaN(d.getTime())) after = d; }
+
+  const bareText = raw.replace(/\b(tag|type|before|after):\S+/g, "").replace(/\s+/g, " ").trim();
+  return { tags, types, before, after, bareText };
+}
 
 function formatDoc(doc: typeof documentsTable.$inferSelect, chunkCount: number) {
   return {
@@ -53,15 +75,29 @@ router.get("/documents", async (req, res): Promise<void> => {
     .orderBy(sql`${documentsTable.pinned} desc, ${documentsTable.createdAt} desc`);
 
   let result = docs;
+
   if (params.data.search) {
-    const s = params.data.search.toLowerCase();
-    result = docs.filter(
-      (d) =>
-        d.title.toLowerCase().includes(s) ||
-        d.content.toLowerCase().includes(s) ||
-        d.tags.some((t) => t.toLowerCase().includes(s))
-    );
+    const { tags: dslTags, types: dslTypes, before, after, bareText } = parseSearchDSL(params.data.search);
+
+    if (bareText) {
+      const s = bareText.toLowerCase();
+      result = result.filter(
+        (d) =>
+          d.title.toLowerCase().includes(s) ||
+          d.content.toLowerCase().includes(s) ||
+          d.tags.some((t) => t.toLowerCase().includes(s))
+      );
+    }
+    for (const tag of dslTags) {
+      result = result.filter((d) => d.tags.some((t) => t.toLowerCase().includes(tag)));
+    }
+    for (const type of dslTypes) {
+      result = result.filter((d) => d.type.toLowerCase() === type);
+    }
+    if (before) result = result.filter((d) => d.createdAt <= before!);
+    if (after) result = result.filter((d) => d.createdAt >= after!);
   }
+
   if (params.data.tag) {
     const tag = params.data.tag.toLowerCase();
     result = result.filter((d) => d.tags.some((t) => t.toLowerCase() === tag));
@@ -357,6 +393,27 @@ router.get("/documents/:id/chunks", async (req, res): Promise<void> => {
   })));
 });
 
+/** Random active document */
+router.get("/documents/random", async (_req, res): Promise<void> => {
+  const docs = await db
+    .select()
+    .from(documentsTable)
+    .where(isNull(documentsTable.deletedAt));
+  if (docs.length === 0) { res.status(404).json({ error: "No documents" }); return; }
+  const pick = docs[Math.floor(Math.random() * docs.length)];
+  res.json(formatDoc(pick, getChunksForDocument(pick.id).length));
+});
+
+/** AI-generated outline / TOC */
+router.get("/documents/:id/outline", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [doc] = await db.select().from(documentsTable).where(eq(documentsTable.id, id));
+  if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
+  const outline = await generateOutline(doc.title, doc.content);
+  res.json({ outline });
+});
+
 /** AI-generated summary */
 router.post("/documents/:id/summarize", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
@@ -387,6 +444,41 @@ router.get("/documents/:id/related", async (req, res): Promise<void> => {
     if (related.length >= 5) break;
   }
   res.json(related);
+});
+
+/** Activity timeline for a document (matched by title in description) */
+router.get("/documents/:id/activity", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [doc] = await db.select().from(documentsTable).where(eq(documentsTable.id, id));
+  if (!doc) { res.status(404).json({ error: "Not found" }); return; }
+
+  const entries = await db
+    .select()
+    .from(activityTable)
+    .where(ilike(activityTable.description, `%${doc.title.slice(0, 60)}%`))
+    .orderBy(sql`${activityTable.createdAt} desc`)
+    .limit(20);
+
+  res.json(entries.map((e) => ({ ...e, createdAt: e.createdAt.toISOString() })));
+});
+
+/** Export all documents in a collection as JSON */
+router.get("/documents/export-collection/:id", async (req, res): Promise<void> => {
+  const collId = Number(req.params.id);
+  if (isNaN(collId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const docs = await db
+    .select()
+    .from(documentsTable)
+    .where(sql`${documentsTable.collectionId} = ${collId} AND ${documentsTable.deletedAt} IS NULL`);
+
+  res.setHeader("Content-Disposition", `attachment; filename="collection-${collId}-export.json"`);
+  res.json({
+    exportedAt: new Date().toISOString(),
+    collectionId: collId,
+    documents: docs.map((d) => formatDoc(d, getChunksForDocument(d.id).length)),
+  });
 });
 
 /** Auto-tag a document using LLM */

@@ -4,7 +4,7 @@ import {
   Brain, FileText, Settings, ActivitySquare, Menu,
   MessageSquare, Plus, Trash2, BookOpen, StickyNote,
   LogIn, LogOut, User, Trash, Network, Bot, Sun, Moon, Keyboard,
-  FolderOpen, X, Pencil,
+  FolderOpen, X, Pencil, BarChart2, Shuffle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -47,12 +47,13 @@ const navItems = [
   { href: "/flashcards", icon: BookOpen, label: "Flashcards" },
   { href: "/knowledge-graph", icon: Network, label: "Knowledge Graph" },
   { href: "/agent", icon: Bot, label: "AI Agent" },
+  { href: "/analytics", icon: BarChart2, label: "Analytics" },
   { href: "/eval", icon: ActivitySquare, label: "Evaluation" },
   { href: "/settings", icon: Settings, label: "Settings" },
 ];
 
 export function AppLayout({ children, sessions, activeSid, onSelectSession, onNewSession }: AppLayoutProps) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const searchString = useSearch();
   const queryClient = useQueryClient();
   const deleteSession = useDeleteChatSession();
@@ -205,6 +206,24 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
         >
           <StickyNote className="h-4 w-4 shrink-0" />
           <span className="hidden lg:block text-sm font-medium">Quick Note</span>
+        </button>
+
+        {/* Random doc */}
+        <button
+          onClick={async () => {
+            try {
+              const res = await fetch(`${BASE}/api/documents/random`);
+              if (res.ok) {
+                const doc = await res.json() as { id: number };
+                setLocation(`/documents?random=${doc.id}`);
+              }
+            } catch { /* ignore */ }
+          }}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all duration-150 text-muted-foreground hover:bg-cyan-400/10 hover:text-cyan-400"
+          title="Open a random document"
+        >
+          <Shuffle className="h-4 w-4 shrink-0" />
+          <span className="hidden lg:block text-sm font-medium">Random Doc</span>
         </button>
 
         {/* Trash */}

@@ -11,9 +11,26 @@ import { useQueryClient } from "@tanstack/react-query";
 import { UploadModal } from "@/components/UploadModal";
 import { DocumentReader } from "@/components/DocumentReader";
 import { ToolResultModal } from "@/components/ToolResultModal";
-import { Search, Plus, Trash2, FileText, File, Github, Globe, ExternalLink, BookOpen, Pin, PinOff, Copy, Share2, GitBranch, CheckSquare, Square, ArrowUpDown, FolderOpen, Check, Tag } from "lucide-react";
+import { Search, Plus, Trash2, FileText, File, Github, Globe, ExternalLink, BookOpen, Pin, PinOff, Copy, Share2, GitBranch, CheckSquare, Square, ArrowUpDown, FolderOpen, Check, Tag, X, ChevronDown, Download } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
+
+const PAGE_SIZE = 24;
+
+/** Parse search DSL tokens like tag:ai type:pdf from a search string */
+function parseDSLChips(raw: string): { key: string; value: string }[] {
+  const chips: { key: string; value: string }[] = [];
+  const re = /\b(tag|type|before|after):(\S+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(raw)) !== null) {
+    chips.push({ key: m[1], value: m[2] });
+  }
+  return chips;
+}
+
+function removeDSLToken(search: string, key: string, value: string): string {
+  return search.replace(new RegExp(`\\b${key}:${value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "g"), "").replace(/\s+/g, " ").trim();
+}
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -69,6 +86,7 @@ export default function Documents() {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [moveDocId, setMoveDocId] = useState<number | null>(null);
   const moveDropdownRef = useRef<HTMLDivElement>(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -90,6 +108,22 @@ export default function Documents() {
   const collectionMap = useMemo(() => new Map(collections.map((c) => [c.id, c])), [collections]);
   const activeCollection = filterCollection ? collectionMap.get(filterCollection) : null;
 
+  // Handle ?random=<id> from AppLayout random doc button
+  useEffect(() => {
+    const p = new URLSearchParams(searchString);
+    const randomId = p.get("random");
+    if (randomId && docs.length > 0) {
+      const doc = docs.find((d) => d.id === Number(randomId));
+      if (doc) {
+        setReaderDoc(doc);
+        setLocation("/documents", { replace: true });
+      }
+    }
+  }, [searchString, docs]);
+
+  // Reset pagination when search/filter changes
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, filterTag, filterCollection, sortBy]);
+
   const sortedDocs = useMemo(() => {
     const copy = [...docs];
     if (sortBy === "newest") copy.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -101,6 +135,10 @@ export default function Documents() {
 
   const pinnedDocs = sortedDocs.filter((d) => d.pinned);
   const unpinnedDocs = sortedDocs.filter((d) => !d.pinned);
+
+  const dslChips = parseDSLChips(search);
+  const paginatedUnpinned = unpinnedDocs.slice(0, Math.max(0, visibleCount - pinnedDocs.length));
+  const hasMore = unpinnedDocs.length > paginatedUnpinned.length;
 
   const handleDelete = async (id: number) => {
     await deleteDoc.mutateAsync({ id });
@@ -490,6 +528,21 @@ export default function Documents() {
                 </div>
               </>
             )}
+            {activeCollection && (
+              <button
+                onClick={() => {
+                  const url = `${BASE}/api/documents/export-collection/${activeCollection.id}`;
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${activeCollection.name.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.json`;
+                  a.click();
+                }}
+                className="flex items-center gap-2 px-3 py-2 bg-card border border-border text-muted-foreground rounded-lg text-sm font-medium hover:text-foreground hover:border-primary/30 transition-all"
+              >
+                <Download className="h-4 w-4" />
+                Export
+              </button>
+            )}
             <button
               onClick={() => setShowUpload(true)}
               className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
@@ -501,12 +554,12 @@ export default function Documents() {
         </div>
 
         {/* Filters */}
-        <div className="flex gap-3 mb-4 flex-wrap">
+        <div className="flex gap-3 mb-1 flex-wrap">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search documents..."
+              placeholder="Search… or use tag:ai type:pdf before:2025-01-01"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2 bg-card border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
@@ -566,6 +619,22 @@ export default function Documents() {
           </div>
         </div>
 
+        {/* DSL chips */}
+        {dslChips.length > 0 && (
+          <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+            <span className="text-xs text-muted-foreground">Filters:</span>
+            {dslChips.map((chip, i) => (
+              <span key={i} className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded-full text-xs font-medium">
+                <span className="text-primary/60">{chip.key}:</span>{chip.value}
+                <button onClick={() => setSearch(removeDSLToken(search, chip.key, chip.value))} className="ml-0.5 hover:text-primary/60 transition-colors">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            <button onClick={() => setSearch("")} className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1">Clear all</button>
+          </div>
+        )}
+
         {/* Document Grid */}
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
@@ -613,8 +682,19 @@ export default function Documents() {
                     </div>
                   )}
                   <motion.div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <AnimatePresence>{unpinnedDocs.map((doc) => <DocCard key={doc.id} doc={doc} />)}</AnimatePresence>
+                    <AnimatePresence>{paginatedUnpinned.map((doc) => <DocCard key={doc.id} doc={doc} />)}</AnimatePresence>
                   </motion.div>
+                  {hasMore && (
+                    <div className="flex justify-center mt-6">
+                      <button
+                        onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-card border border-border rounded-xl text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all"
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                        Load more ({unpinnedDocs.length - paginatedUnpinned.length} remaining)
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

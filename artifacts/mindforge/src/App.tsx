@@ -12,6 +12,7 @@ import Trash from "@/pages/Trash";
 import KnowledgeGraph from "@/pages/KnowledgeGraph";
 import Agent from "@/pages/Agent";
 import SharedDocument from "@/pages/SharedDocument";
+import Analytics from "@/pages/Analytics";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,6 +34,7 @@ function Router() {
       <Route path="/trash" component={Trash} />
       <Route path="/knowledge-graph" component={KnowledgeGraph} />
       <Route path="/agent" component={Agent} />
+      <Route path="/analytics" component={Analytics} />
       <Route path="/share/:token" component={SharedDocument} />
       <Route component={NotFound} />
     </Switch>

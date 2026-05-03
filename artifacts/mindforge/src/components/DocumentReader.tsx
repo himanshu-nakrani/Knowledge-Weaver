@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, ExternalLink, FileText, File, Github, Globe, Tag, Layers, Clock, Hash, Zap, BookOpen, GitBranch, List, Download, Sparkles, Network, Loader2, RefreshCw } from "lucide-react";
+import { X, ExternalLink, FileText, File, Github, Globe, Tag, Layers, Clock, Hash, Zap, BookOpen, GitBranch, List, Download, Sparkles, Network, Loader2, RefreshCw, AlignLeft, Activity } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
 import { getListDocumentsQueryKey } from "@workspace/api-client-react";
@@ -87,8 +87,11 @@ function exportAsMarkdown(doc: Doc) {
   URL.revokeObjectURL(a.href);
 }
 
+interface OutlineItem { level: number; heading: string; summary: string }
+interface ActivityEntry { id: number; type: string; description: string; createdAt: string }
+
 export function DocumentReader({ doc, onClose, onTool, onOpenDoc }: DocumentReaderProps) {
-  const [tab, setTab] = useState<"content" | "summary" | "related" | "meta">("content");
+  const [tab, setTab] = useState<"content" | "outline" | "summary" | "related" | "meta">("content");
   const { words, mins } = readingTime(doc.content);
   const queryClient = useQueryClient();
 
@@ -100,9 +103,17 @@ export function DocumentReader({ doc, onClose, onTool, onOpenDoc }: DocumentRead
   const [related, setRelated] = useState<RelatedDoc[] | null>(null);
   const [relatedLoading, setRelatedLoading] = useState(false);
 
+  // Outline state
+  const [outline, setOutline] = useState<OutlineItem[] | null>(null);
+  const [outlineLoading, setOutlineLoading] = useState(false);
+
   // Auto-tag state
   const [autoTagging, setAutoTagging] = useState(false);
   const [tagSuccess, setTagSuccess] = useState(false);
+
+  // Activity timeline state
+  const [docActivity, setDocActivity] = useState<ActivityEntry[] | null>(null);
+  const [activityLoading, setActivityLoading] = useState(false);
 
   const loadSummary = async () => {
     setSummaryLoading(true);
@@ -130,6 +141,19 @@ export function DocumentReader({ doc, onClose, onTool, onOpenDoc }: DocumentRead
     }
   };
 
+  const loadOutline = async () => {
+    setOutlineLoading(true);
+    try {
+      const res = await fetch(`${BASE}/api/documents/${doc.id}/outline`);
+      const data = await res.json() as { outline: OutlineItem[] };
+      setOutline(data.outline ?? []);
+    } catch {
+      setOutline([]);
+    } finally {
+      setOutlineLoading(false);
+    }
+  };
+
   const handleAutoTag = async () => {
     setAutoTagging(true);
     try {
@@ -144,9 +168,24 @@ export function DocumentReader({ doc, onClose, onTool, onOpenDoc }: DocumentRead
     }
   };
 
+  const loadActivity = async () => {
+    setActivityLoading(true);
+    try {
+      const res = await fetch(`${BASE}/api/documents/${doc.id}/activity`);
+      const data = await res.json() as ActivityEntry[];
+      setDocActivity(data);
+    } catch {
+      setDocActivity([]);
+    } finally {
+      setActivityLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (tab === "summary" && !summary && !summaryLoading) loadSummary();
     if (tab === "related" && !related && !relatedLoading) loadRelated();
+    if (tab === "outline" && !outline && !outlineLoading) loadOutline();
+    if (tab === "meta" && !docActivity && !activityLoading) loadActivity();
   }, [tab]);
 
   const typeIconBig: Record<string, React.ReactNode> = {
@@ -246,6 +285,7 @@ export function DocumentReader({ doc, onClose, onTool, onOpenDoc }: DocumentRead
         <div className="flex border-b border-border shrink-0 overflow-x-auto">
           {[
             { id: "content" as const, label: "Content" },
+            { id: "outline" as const, label: "📋 Outline" },
             { id: "summary" as const, label: "✨ Summary" },
             { id: "related" as const, label: "🔗 Related" },
             { id: "meta" as const, label: "Details" },
@@ -267,6 +307,67 @@ export function DocumentReader({ doc, onClose, onTool, onOpenDoc }: DocumentRead
           {tab === "content" && (
             <div className="prose-sm max-w-none">
               {renderContent(doc.type, doc.content)}
+            </div>
+          )}
+
+          {tab === "outline" && (
+            <div className="space-y-3">
+              {outlineLoading ? (
+                <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="text-sm">Generating outline...</span>
+                </div>
+              ) : outline !== null ? (
+                outline.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+                    <AlignLeft className="h-8 w-8 text-muted-foreground/40" />
+                    <div>
+                      <p className="font-medium text-foreground mb-1">No outline generated</p>
+                      <p className="text-xs text-muted-foreground">Document may be too short or unstructured.</p>
+                    </div>
+                    <button onClick={loadOutline} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity">
+                      <RefreshCw className="h-4 w-4" /> Try again
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <AlignLeft className="h-4 w-4 text-primary" />
+                        <span className="text-sm font-medium text-foreground">Document outline</span>
+                        <span className="text-xs text-muted-foreground">({outline.length} sections)</span>
+                      </div>
+                      <button onClick={loadOutline} className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+                        <RefreshCw className="h-3 w-3" /> Regenerate
+                      </button>
+                    </div>
+                    {outline.map((item, i) => (
+                      <div key={i} className={`group flex items-start gap-2 p-2.5 rounded-lg hover:bg-muted/50 transition-colors ${item.level === 1 ? "" : item.level === 2 ? "ml-4" : "ml-8"}`}>
+                        <div className={`mt-1 shrink-0 rounded-full ${item.level === 1 ? "w-2 h-2 bg-primary" : item.level === 2 ? "w-1.5 h-1.5 bg-primary/60" : "w-1 h-1 bg-primary/30"}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-medium text-foreground truncate ${item.level === 1 ? "text-sm" : "text-xs"}`}>{item.heading}</p>
+                          {item.summary && (
+                            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{item.summary}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
+                  <div className="w-14 h-14 rounded-xl bg-primary/5 border border-primary/10 flex items-center justify-center">
+                    <AlignLeft className="h-7 w-7 text-primary/40" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground mb-1">Generate Outline</p>
+                    <p className="text-xs text-muted-foreground max-w-xs">Get an AI-generated table of contents with section summaries.</p>
+                  </div>
+                  <button onClick={loadOutline} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity">
+                    <AlignLeft className="h-4 w-4" /> Generate Outline
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -421,6 +522,40 @@ export function DocumentReader({ doc, onClose, onTool, onOpenDoc }: DocumentRead
                   {autoTagging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                   {tagSuccess ? "Tags updated!" : autoTagging ? "Tagging..." : "AI Auto-tag"}
                 </button>
+              </div>
+
+              {/* Activity timeline */}
+              <div className="pt-3 border-t border-border">
+                <div className="flex items-center gap-2 mb-3">
+                  <Activity className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-xs font-semibold text-foreground uppercase tracking-wide">Activity</span>
+                  {docActivity !== null && (
+                    <button onClick={loadActivity} className="ml-auto text-xs text-muted-foreground hover:text-foreground transition-colors">
+                      <RefreshCw className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+                {activityLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />Loading activity...
+                  </div>
+                ) : docActivity === null || docActivity.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-2">No activity recorded yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {docActivity.map((entry) => (
+                      <div key={entry.id} className="flex items-start gap-2.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary/50 mt-1.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-foreground leading-snug">{entry.description}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {new Date(entry.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

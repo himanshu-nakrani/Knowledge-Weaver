@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Bot, Send, Loader2, CheckCircle2, Circle, ChevronDown, ChevronRight, ExternalLink, AlertCircle, Copy, Check, Trash2, FileText } from "lucide-react";
+import { Bot, Send, Loader2, CheckCircle2, Circle, ChevronDown, ChevronRight, ExternalLink, AlertCircle, Copy, Check, Trash2, FileText, FlaskConical, Lightbulb, GraduationCap, Target } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 
@@ -32,11 +32,23 @@ interface AgentRun {
   running: boolean;
 }
 
+type AgentMode = "researcher" | "brainstorm" | "tutor" | "critic";
+
+const MODES: { id: AgentMode; label: string; icon: React.ReactNode; desc: string; color: string }[] = [
+  { id: "researcher", label: "Researcher", icon: <FlaskConical className="h-3.5 w-3.5" />, desc: "Deep evidence-based research with citations", color: "text-blue-400 border-blue-400/30 bg-blue-400/10" },
+  { id: "brainstorm", label: "Brainstorm", icon: <Lightbulb className="h-3.5 w-3.5" />, desc: "Creative connections and lateral thinking", color: "text-yellow-400 border-yellow-400/30 bg-yellow-400/10" },
+  { id: "tutor", label: "Tutor", icon: <GraduationCap className="h-3.5 w-3.5" />, desc: "Clear explanations with examples and analogies", color: "text-green-400 border-green-400/30 bg-green-400/10" },
+  { id: "critic", label: "Critic", icon: <Target className="h-3.5 w-3.5" />, desc: "Skeptical analysis of weaknesses and gaps", color: "text-red-400 border-red-400/30 bg-red-400/10" },
+];
+
 const stepIcons: Record<string, string> = {
   plan: "🧭",
   retrieve: "🔍",
   websearch: "🌐",
   reason: "🧠",
+  analogy: "💡",
+  connections: "🔗",
+  critique: "🎯",
   answer: "✍️",
 };
 
@@ -143,6 +155,7 @@ function loadSavedRuns(): AgentRun[] {
 
 export default function Agent() {
   const [input, setInput] = useState("");
+  const [mode, setMode] = useState<AgentMode>("researcher");
   const [runs, setRuns] = useState<AgentRun[]>(loadSavedRuns);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [traceCopiedId, setTraceCopiedId] = useState<number | null>(null);
@@ -195,7 +208,7 @@ export default function Agent() {
       setRuns((prev) => prev.map((r) => (r.id === id ? updater(r) : r)));
     };
 
-    const url = `${BASE}/api/agent/run?content=${encodeURIComponent(q)}`;
+    const url = `${BASE}/api/agent/run?content=${encodeURIComponent(q)}&mode=${mode}`;
     const eventSource = new EventSource(url);
 
     eventSource.onmessage = (e) => {
@@ -253,9 +266,9 @@ export default function Agent() {
       <div className="h-full flex flex-col overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-border shrink-0">
-          <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                 <Bot className="h-4 w-4 text-primary" />
               </div>
               <div>
@@ -264,7 +277,7 @@ export default function Agent() {
               </div>
             </div>
             {runs.length > 0 && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <span className="text-xs text-muted-foreground">{runs.filter((r) => !r.running).length} saved</span>
                 <button
                   onClick={clearHistory}
@@ -276,6 +289,22 @@ export default function Agent() {
                 </button>
               </div>
             )}
+          </div>
+          {/* Mode selector */}
+          <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+            {MODES.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => setMode(m.id)}
+                title={m.desc}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                  mode === m.id ? m.color : "text-muted-foreground border-border hover:border-primary/30 hover:text-foreground"
+                }`}
+              >
+                {m.icon}
+                {m.label}
+              </button>
+            ))}
           </div>
         </div>
 

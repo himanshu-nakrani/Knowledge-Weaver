@@ -90,6 +90,15 @@ function DeckCard({ deck, onDelete, onUpdate }: {
     setReviewing(true);
   };
 
+  const handleSkip = () => {
+    const nextIdx = cardIdx + 1;
+    if (nextIdx < cards.length) {
+      setCardIdx(nextIdx);
+      setFlipped(false);
+      setGraded(false);
+    }
+  };
+
   const handleGrade = async (grade: Grade) => {
     const updated = { ...sessionSR, [cardIdx]: sm2(sessionSR[cardIdx], grade) };
     setSessionSR(updated);
@@ -181,28 +190,64 @@ function DeckCard({ deck, onDelete, onUpdate }: {
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }}
               className="bg-card border border-border rounded-2xl w-full max-w-md shadow-2xl overflow-hidden"
               onClick={(e) => e.stopPropagation()}>
+              {/* Header */}
               <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold">{deck.deckTitle}</span>
-                  {sessionStreak > 0 && <span className="flex items-center gap-0.5 text-xs text-orange-400"><Flame className="h-3 w-3" />{sessionStreak}</span>}
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-sm font-semibold truncate">{deck.deckTitle}</span>
+                  {sessionStreak > 0 && (
+                    <span className="flex items-center gap-0.5 text-xs text-orange-400 shrink-0 px-1.5 py-0.5 bg-orange-400/10 rounded-full">
+                      <Flame className="h-3 w-3" />{sessionStreak}
+                    </span>
+                  )}
                 </div>
-                <span className="text-xs text-muted-foreground">{cardIdx + 1} / {cards.length}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs font-medium text-muted-foreground tabular-nums">{cardIdx + 1} / {cards.length}</span>
+                  {doneCards.size > 0 && (
+                    <span className="text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">{doneCards.size} done</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="w-full bg-muted h-1.5">
+                <div
+                  className="bg-primary h-1.5 transition-all duration-500"
+                  style={{ width: `${(doneCards.size / cards.length) * 100}%` }}
+                />
               </div>
 
               <div className="p-6">
-                <div className="w-full bg-muted rounded-full h-1 mb-6">
-                  <div className="bg-primary h-1 rounded-full transition-all duration-500" style={{ width: `${((cardIdx + 1) / cards.length) * 100}%` }} />
-                </div>
+                {/* 3D flip card */}
                 {currentCard && (
-                  <motion.div key={`${cardIdx}-${flipped}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                    className={`min-h-[160px] flex flex-col items-center justify-center text-center p-6 rounded-xl border cursor-pointer transition-all ${flipped ? "border-green-500/40 bg-green-500/5" : "border-border bg-muted hover:border-primary/30"}`}
-                    onClick={() => !graded && setFlipped(!flipped)}>
-                    {!flipped ? (
-                      <><p className="text-sm font-semibold text-foreground leading-relaxed">{currentCard.question}</p><p className="text-xs text-muted-foreground mt-4">Tap to reveal answer</p></>
-                    ) : (
-                      <><p className="text-sm text-green-400 font-medium leading-relaxed">{currentCard.answer}</p><p className="text-xs text-muted-foreground mt-4">Rate your recall below</p></>
-                    )}
-                  </motion.div>
+                  <div
+                    className="relative cursor-pointer"
+                    style={{ perspective: "1000px", height: "180px" }}
+                    onClick={() => !graded && setFlipped(!flipped)}
+                  >
+                    <motion.div
+                      animate={{ rotateY: flipped ? 180 : 0 }}
+                      transition={{ duration: 0.4, type: "spring", stiffness: 200, damping: 20 }}
+                      style={{ transformStyle: "preserve-3d" }}
+                      className="w-full h-full"
+                    >
+                      {/* Front */}
+                      <div
+                        className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 rounded-xl border border-border bg-muted hover:border-primary/30 transition-colors"
+                        style={{ backfaceVisibility: "hidden" }}
+                      >
+                        <p className="text-sm font-semibold text-foreground leading-relaxed">{currentCard.question}</p>
+                        <p className="text-xs text-muted-foreground mt-4">Tap to reveal answer</p>
+                      </div>
+                      {/* Back */}
+                      <div
+                        className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 rounded-xl border border-green-500/40 bg-green-500/5"
+                        style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
+                      >
+                        <p className="text-sm text-green-400 font-medium leading-relaxed">{currentCard.answer}</p>
+                        <p className="text-xs text-muted-foreground mt-4">Rate your recall below</p>
+                      </div>
+                    </motion.div>
+                  </div>
                 )}
               </div>
 
@@ -210,28 +255,38 @@ function DeckCard({ deck, onDelete, onUpdate }: {
                 {isSessionDone ? (
                   <motion.div key="done" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="px-5 pb-5 flex flex-col items-center gap-3 text-center">
                     <div className="w-12 h-12 rounded-full bg-orange-400/10 flex items-center justify-center"><Flame className="h-6 w-6 text-orange-400" /></div>
-                    <div><p className="font-semibold text-foreground">Session complete!</p><p className="text-xs text-muted-foreground mt-0.5">Streak: {sessionStreak} · {doneCards.size} cards reviewed</p></div>
+                    <div>
+                      <p className="font-semibold text-foreground">Session complete!</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Streak: {sessionStreak} · {doneCards.size} cards reviewed</p>
+                    </div>
                     <button onClick={() => setReviewing(false)} className="w-full py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity">Done</button>
                   </motion.div>
                 ) : flipped && !graded ? (
-                  <motion.div key="grade" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="px-5 pb-5 grid grid-cols-4 gap-2">
-                    {([
-                      { grade: 0 as Grade, label: "Again", icon: <RotateCcw className="h-3.5 w-3.5" />, color: "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20" },
-                      { grade: 1 as Grade, label: "Hard", icon: <ChevronRight className="h-3.5 w-3.5" />, color: "bg-orange-500/10 text-orange-400 border-orange-500/20 hover:bg-orange-500/20" },
-                      { grade: 2 as Grade, label: "Good", icon: <ThumbsUp className="h-3.5 w-3.5" />, color: "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20" },
-                      { grade: 3 as Grade, label: "Easy", icon: <Zap className="h-3.5 w-3.5" />, color: "bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20" },
-                    ]).map(({ grade, label, icon, color }) => (
-                      <button key={grade} onClick={() => handleGrade(grade)}
-                        className={`flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-colors ${color}`}>
-                        {icon}{label}
-                      </button>
-                    ))}
+                  <motion.div key="grade" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="px-5 pb-5 space-y-2">
+                    <div className="grid grid-cols-4 gap-2">
+                      {([
+                        { grade: 0 as Grade, label: "Again", icon: <RotateCcw className="h-3.5 w-3.5" />, color: "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20" },
+                        { grade: 1 as Grade, label: "Hard", icon: <ChevronRight className="h-3.5 w-3.5" />, color: "bg-orange-500/10 text-orange-400 border-orange-500/20 hover:bg-orange-500/20" },
+                        { grade: 2 as Grade, label: "Good", icon: <ThumbsUp className="h-3.5 w-3.5" />, color: "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20" },
+                        { grade: 3 as Grade, label: "Easy", icon: <Zap className="h-3.5 w-3.5" />, color: "bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20" },
+                      ]).map(({ grade, label, icon, color }) => (
+                        <button key={grade} onClick={() => handleGrade(grade)}
+                          className={`flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-colors ${color}`}>
+                          {icon}{label}
+                        </button>
+                      ))}
+                    </div>
                   </motion.div>
                 ) : (
-                  <motion.div key="show" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-5 pb-5">
-                    <button onClick={() => setFlipped(true)} className="w-full py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity">
+                  <motion.div key="show" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-5 pb-5 flex gap-2">
+                    <button onClick={() => setFlipped(true)} className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity">
                       Show Answer
                     </button>
+                    {!isLastCard && (
+                      <button onClick={handleSkip} className="px-3 py-2 bg-muted border border-border rounded-lg text-sm text-muted-foreground hover:text-foreground transition-colors" title="Skip this card">
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>

@@ -1,7 +1,18 @@
 import { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Key, Brain, Globe, Info, Download, Loader2, Sliders, RotateCcw, BarChart2, TrendingUp, Clock } from "lucide-react";
+import { Key, Brain, Globe, Info, Download, Loader2, Sliders, RotateCcw, BarChart2, TrendingUp, Clock, Tag, Plus, X, Sparkles, Check } from "lucide-react";
 import { usePreferences, GROQ_MODELS } from "@/hooks/usePreferences";
+
+const AUTOTAG_RULES_KEY = "mindforge:autotag-rules";
+
+interface AutoTagRule { id: string; keyword: string; tag: string }
+
+function loadRules(): AutoTagRule[] {
+  try { return JSON.parse(localStorage.getItem(AUTOTAG_RULES_KEY) ?? "[]"); } catch { return []; }
+}
+function saveRules(rules: AutoTagRule[]) {
+  localStorage.setItem(AUTOTAG_RULES_KEY, JSON.stringify(rules));
+}
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -17,6 +28,64 @@ export default function Settings() {
   const { prefs, setPrefs, resetPrefs } = usePreferences();
   const [queryStats, setQueryStats] = useState<QueryStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
+
+  // Auto-tag rules state
+  const [rules, setRules] = useState<AutoTagRule[]>(loadRules);
+  const [newKeyword, setNewKeyword] = useState("");
+  const [newTag, setNewTag] = useState("");
+  const [applyingRules, setApplyingRules] = useState(false);
+  const [applyResult, setApplyResult] = useState<string | null>(null);
+
+  const addRule = () => {
+    const keyword = newKeyword.trim().toLowerCase();
+    const tag = newTag.trim().toLowerCase();
+    if (!keyword || !tag) return;
+    const updated = [...rules, { id: crypto.randomUUID(), keyword, tag }];
+    setRules(updated);
+    saveRules(updated);
+    setNewKeyword("");
+    setNewTag("");
+  };
+
+  const removeRule = (id: string) => {
+    const updated = rules.filter((r) => r.id !== id);
+    setRules(updated);
+    saveRules(updated);
+  };
+
+  const applyRulesToAll = async () => {
+    if (rules.length === 0) return;
+    setApplyingRules(true);
+    setApplyResult(null);
+    let patched = 0;
+    try {
+      const res = await fetch(`${BASE}/api/documents`);
+      const docs = await res.json() as { id: number; title: string; content: string; tags: string[] }[];
+      for (const doc of docs) {
+        const text = (doc.title + " " + doc.content).toLowerCase();
+        const newTags: string[] = [];
+        for (const rule of rules) {
+          if (text.includes(rule.keyword) && !doc.tags.includes(rule.tag)) {
+            newTags.push(rule.tag);
+          }
+        }
+        if (newTags.length > 0) {
+          await fetch(`${BASE}/api/documents/${doc.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tags: [...doc.tags, ...newTags] }),
+          });
+          patched++;
+        }
+      }
+      setApplyResult(`Applied to ${patched} document${patched !== 1 ? "s" : ""}`);
+    } catch {
+      setApplyResult("Failed to apply rules");
+    } finally {
+      setApplyingRules(false);
+      setTimeout(() => setApplyResult(null), 4000);
+    }
+  };
 
   const loadQueryStats = async () => {
     setStatsLoading(true);
@@ -249,6 +318,75 @@ export default function Settings() {
                 {statsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "No queries tracked yet"}
               </div>
             )}
+          </div>
+
+          {/* Auto-tag Rules */}
+          <div className="bg-card border border-border rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-lg"><Tag className="h-4 w-4 text-primary" /></div>
+                <div>
+                  <h2 className="font-semibold text-foreground">Auto-tag Rules</h2>
+                  <p className="text-muted-foreground text-xs">Automatically tag documents that contain keywords</p>
+                </div>
+              </div>
+              <button
+                onClick={applyRulesToAll}
+                disabled={applyingRules || rules.length === 0}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 rounded-lg hover:bg-primary/20 transition-colors disabled:opacity-50"
+              >
+                {applyingRules ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                {applyResult ?? "Apply to all docs"}
+              </button>
+            </div>
+
+            {/* Existing rules */}
+            {rules.length > 0 && (
+              <div className="space-y-1.5 mb-4">
+                {rules.map((rule) => (
+                  <div key={rule.id} className="flex items-center gap-2 px-3 py-2 bg-muted/40 rounded-lg">
+                    <span className="text-xs text-muted-foreground flex-1">
+                      If document contains <span className="text-foreground font-mono font-medium">"{rule.keyword}"</span>
+                      {" → "}tag as <span className="text-primary font-medium">{rule.tag}</span>
+                    </span>
+                    <button onClick={() => removeRule(rule.id)} className="p-0.5 text-muted-foreground hover:text-destructive transition-colors rounded">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {rules.length === 0 && (
+              <p className="text-xs text-muted-foreground mb-4">No rules yet. Add a rule to automatically tag documents by keyword.</p>
+            )}
+
+            {/* Add rule form */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                value={newKeyword}
+                onChange={(e) => setNewKeyword(e.target.value)}
+                placeholder="Keyword (e.g. python)"
+                className="flex-1 min-w-[120px] px-3 py-1.5 bg-muted border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                onKeyDown={(e) => e.key === "Enter" && addRule()}
+              />
+              <span className="text-xs text-muted-foreground">→ tag:</span>
+              <input
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                placeholder="Tag (e.g. programming)"
+                className="flex-1 min-w-[120px] px-3 py-1.5 bg-muted border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                onKeyDown={(e) => e.key === "Enter" && addRule()}
+              />
+              <button
+                onClick={addRule}
+                disabled={!newKeyword.trim() || !newTag.trim()}
+                className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add
+              </button>
+            </div>
           </div>
 
           {/* API Keys */}
