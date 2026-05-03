@@ -2,6 +2,8 @@ import { Router, type IRouter } from "express";
 import { chatCompletion, tavilySearch, shouldUseWebSearch } from "../lib/groq";
 import { similaritySearch } from "../lib/vectorStore";
 import { logger } from "../lib/logger";
+import { rateLimiter } from "../middlewares/rateLimiter";
+import { trackQuery } from "./stats";
 
 const router: IRouter = Router();
 
@@ -9,7 +11,7 @@ function sseWrite(res: import("express").Response, event: object) {
   res.write(`data: ${JSON.stringify(event)}\n\n`);
 }
 
-router.get("/agent/run", async (req, res): Promise<void> => {
+router.get("/agent/run", rateLimiter(8, 60000), async (req, res): Promise<void> => {
   const content = String(req.query.content ?? "").trim();
   if (!content) {
     res.status(400).json({ error: "content query param required" });
@@ -21,6 +23,8 @@ router.get("/agent/run", async (req, res): Promise<void> => {
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders();
+
+  trackQuery(content);
 
   try {
     sseWrite(res, { type: "step", step: "plan", status: "running", label: "Planning approach", detail: `Analyzing: "${content.slice(0, 80)}${content.length > 80 ? "..." : ""}"` });

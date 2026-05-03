@@ -4,7 +4,7 @@ import {
   Brain, FileText, Settings, ActivitySquare, Menu,
   MessageSquare, Plus, Trash2, BookOpen, StickyNote,
   LogIn, LogOut, User, Trash, Network, Bot, Sun, Moon, Keyboard,
-  FolderOpen, X,
+  FolderOpen, X, Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -65,6 +65,8 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
   const [showNewColl, setShowNewColl] = useState(false);
   const [newCollName, setNewCollName] = useState("");
   const [newCollColor, setNewCollColor] = useState("#6366f1");
+  const [renamingCollId, setRenamingCollId] = useState<number | null>(null);
+  const [renameVal, setRenameVal] = useState("");
 
   const activeCollectionId = (() => {
     if (location !== "/documents") return null;
@@ -107,6 +109,18 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
     e.stopPropagation();
     await fetch(`${BASE}/api/collections/${id}`, { method: "DELETE" });
     setCollections((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  const handleRenameCollection = async (id: number, name: string) => {
+    const trimmed = name.trim();
+    setRenamingCollId(null);
+    if (!trimmed) return;
+    await fetch(`${BASE}/api/collections/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: trimmed }),
+    });
+    setCollections((prev) => prev.map((c) => (c.id === id ? { ...c, name: trimmed } : c)));
   };
 
   useEffect(() => {
@@ -271,27 +285,70 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
             <p className="hidden lg:block text-[10px] text-muted-foreground px-2 pb-1">No collections yet</p>
           ) : (
             collections.map((coll) => (
-              <Link key={coll.id} href={`/documents?c=${coll.id}`}>
-                <div
-                  className={`group flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-all ${
-                    activeCollectionId === coll.id
-                      ? "text-foreground"
-                      : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-                  }`}
-                  style={activeCollectionId === coll.id ? { background: `${coll.color}18`, borderLeft: `2px solid ${coll.color}` } : {}}
-                >
-                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: coll.color }} />
-                  <span className="hidden lg:block text-xs truncate flex-1">{coll.name}</span>
-                  <span className="hidden lg:block text-[10px] text-muted-foreground/60 shrink-0">{coll.documentCount}</span>
-                  <button
-                    onClick={(e) => handleDeleteCollection(e, coll.id)}
-                    className="hidden lg:hidden group-hover:block p-0.5 hover:text-destructive transition-colors rounded ml-auto"
-                    title="Delete collection"
+              <div key={coll.id}>
+                {renamingCollId === coll.id ? (
+                  <form
+                    onSubmit={(e) => { e.preventDefault(); handleRenameCollection(coll.id, renameVal); }}
+                    className="px-1 py-1"
                   >
-                    <X className="h-2.5 w-2.5" />
-                  </button>
-                </div>
-              </Link>
+                    <input
+                      autoFocus
+                      value={renameVal}
+                      onChange={(e) => setRenameVal(e.target.value)}
+                      onBlur={() => handleRenameCollection(coll.id, renameVal)}
+                      onKeyDown={(e) => e.key === "Escape" && setRenamingCollId(null)}
+                      className="w-full px-2 py-1 bg-card border border-primary/40 rounded-lg text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    />
+                  </form>
+                ) : (
+                  <Link href={`/documents?c=${coll.id}`}>
+                    <div
+                      className={`group flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-all ${
+                        activeCollectionId === coll.id
+                          ? "text-foreground"
+                          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                      }`}
+                      style={activeCollectionId === coll.id ? { background: `${coll.color}18`, borderLeft: `2px solid ${coll.color}` } : {}}
+                    >
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: coll.color }} />
+                      <span
+                        className="hidden lg:block text-xs truncate flex-1"
+                        onDoubleClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setRenamingCollId(coll.id);
+                          setRenameVal(coll.name);
+                        }}
+                        title="Double-click to rename"
+                      >
+                        {coll.name}
+                      </span>
+                      <span className="hidden lg:block text-[10px] text-muted-foreground/60 shrink-0">{coll.documentCount}</span>
+                      <div className="hidden group-hover:flex items-center gap-0.5 ml-auto">
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setRenamingCollId(coll.id);
+                            setRenameVal(coll.name);
+                          }}
+                          className="p-0.5 hover:text-primary transition-colors rounded"
+                          title="Rename"
+                        >
+                          <Pencil className="h-2.5 w-2.5" />
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteCollection(e, coll.id)}
+                          className="p-0.5 hover:text-destructive transition-colors rounded"
+                          title="Delete collection"
+                        >
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </Link>
+                )}
+              </div>
             ))
           )}
         </div>

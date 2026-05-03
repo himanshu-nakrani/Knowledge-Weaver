@@ -23,6 +23,7 @@ import {
 } from "../lib/groq";
 import { logger } from "../lib/logger";
 import { setLastEval } from "../lib/evalStore";
+import { trackQuery } from "./stats";
 
 const router: IRouter = Router();
 
@@ -105,6 +106,7 @@ router.delete("/chat/sessions/:id", async (req, res): Promise<void> => {
 
 /** Shared: build retrieval context and system prompt */
 async function buildChatContext(sessionId: number, userContent: string) {
+  trackQuery(userContent);
   const expandedQuery = await expandQuery(userContent);
   const retrievedChunks = await similaritySearch(expandedQuery, 5);
   const hasRelevantDocs = retrievedChunks.length > 0 && retrievedChunks[0].score > 0.2;

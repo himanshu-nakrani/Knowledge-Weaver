@@ -11,7 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { UploadModal } from "@/components/UploadModal";
 import { DocumentReader } from "@/components/DocumentReader";
 import { ToolResultModal } from "@/components/ToolResultModal";
-import { Search, Plus, Trash2, FileText, File, Github, Globe, ExternalLink, BookOpen, Pin, PinOff, Copy, Share2, GitBranch, CheckSquare, Square, ArrowUpDown, FolderOpen, Check } from "lucide-react";
+import { Search, Plus, Trash2, FileText, File, Github, Globe, ExternalLink, BookOpen, Pin, PinOff, Copy, Share2, GitBranch, CheckSquare, Square, ArrowUpDown, FolderOpen, Check, Tag } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 
@@ -58,6 +58,10 @@ export default function Documents() {
   const [toolState, setToolState] = useState<{ type: ToolType; docId: number } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkMode, setBulkMode] = useState(false);
+  const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
+  const [bulkTagOpen, setBulkTagOpen] = useState(false);
+  const [bulkTagInput, setBulkTagInput] = useState("");
+  const bulkMoveRef = useRef<HTMLDivElement>(null);
   const [shareModalDocId, setShareModalDocId] = useState<number | null>(null);
   const [shareInfo, setShareInfo] = useState<{ token: string; url: string } | null>(null);
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "title" | "type">("newest");
@@ -162,6 +166,7 @@ export default function Documents() {
   };
 
   const handleBulkDelete = async () => {
+    const count = selectedIds.size;
     try {
       for (const id of selectedIds) {
         await deleteDoc.mutateAsync({ id });
@@ -169,9 +174,57 @@ export default function Documents() {
       queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });
       setSelectedIds(new Set());
       setBulkMode(false);
-      toast({ title: `Deleted ${selectedIds.size} document${selectedIds.size > 1 ? "s" : ""}` });
+      toast({ title: `Deleted ${count} document${count > 1 ? "s" : ""}` });
     } catch {
       toast({ title: "Delete failed", variant: "destructive" });
+    }
+  };
+
+  const handleBulkMove = async (collectionId: number | null) => {
+    const count = selectedIds.size;
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map((id) =>
+          fetch(`${BASE}/api/documents/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ collectionId }),
+          })
+        )
+      );
+      queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });
+      const collName = collectionId ? collectionMap.get(collectionId)?.name : null;
+      toast({ title: collName ? `Moved ${count} docs to "${collName}"` : `Removed ${count} docs from collection` });
+      setBulkMoveOpen(false);
+      setSelectedIds(new Set());
+      setBulkMode(false);
+    } catch {
+      toast({ title: "Move failed", variant: "destructive" });
+    }
+  };
+
+  const handleBulkAddTag = async () => {
+    const tag = bulkTagInput.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!tag) return;
+    const count = selectedIds.size;
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map(async (id) => {
+          const doc = docs.find((d) => d.id === id);
+          if (!doc || doc.tags.includes(tag)) return;
+          return fetch(`${BASE}/api/documents/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tags: [...doc.tags, tag] }),
+          });
+        })
+      );
+      queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });
+      toast({ title: `Tag "${tag}" added to ${count} doc${count > 1 ? "s" : ""}` });
+      setBulkTagInput("");
+      setBulkTagOpen(false);
+    } catch {
+      toast({ title: "Tag failed", variant: "destructive" });
     }
   };
 
@@ -179,6 +232,9 @@ export default function Documents() {
     const handler = (e: MouseEvent) => {
       if (moveDropdownRef.current && !moveDropdownRef.current.contains(e.target as Node)) {
         setMoveDocId(null);
+      }
+      if (bulkMoveRef.current && !bulkMoveRef.current.contains(e.target as Node)) {
+        setBulkMoveOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -345,13 +401,94 @@ export default function Documents() {
               {bulkMode ? "Exit Select" : "Select"}
             </button>
             {bulkMode && selectedIds.size > 0 && (
-              <button
-                onClick={handleBulkDelete}
-                className="flex items-center gap-2 px-3 py-2 bg-destructive/10 border border-destructive/30 text-destructive rounded-lg text-sm font-medium hover:bg-destructive/20 transition-colors"
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete {selectedIds.size}
-              </button>
+              <>
+                <button
+                  onClick={handleBulkDelete}
+                  className="flex items-center gap-2 px-3 py-2 bg-destructive/10 border border-destructive/30 text-destructive rounded-lg text-sm font-medium hover:bg-destructive/20 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete {selectedIds.size}
+                </button>
+
+                {/* Bulk move to collection */}
+                <div className="relative" ref={bulkMoveRef}>
+                  <button
+                    onClick={() => { setBulkMoveOpen((v) => !v); setBulkTagOpen(false); }}
+                    className="flex items-center gap-2 px-3 py-2 bg-amber-400/10 border border-amber-400/30 text-amber-400 rounded-lg text-sm font-medium hover:bg-amber-400/20 transition-colors"
+                  >
+                    <FolderOpen className="h-4 w-4" />
+                    Move
+                  </button>
+                  <AnimatePresence>
+                    {bulkMoveOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                        transition={{ duration: 0.12 }}
+                        className="absolute right-0 top-full mt-1 w-48 bg-card border border-border rounded-xl shadow-2xl z-40 overflow-hidden py-1"
+                      >
+                        <p className="px-3 py-1.5 text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Move {selectedIds.size} docs to:</p>
+                        <button
+                          onMouseDown={() => handleBulkMove(null)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs text-destructive/80 hover:bg-destructive/10 transition-colors"
+                        >
+                          Remove from collection
+                        </button>
+                        {collections.length === 0 ? (
+                          <p className="px-3 py-2 text-xs text-muted-foreground">No collections yet</p>
+                        ) : (
+                          collections.map((coll) => (
+                            <button
+                              key={coll.id}
+                              onMouseDown={() => handleBulkMove(coll.id)}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-foreground hover:bg-accent transition-colors"
+                            >
+                              <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: coll.color }} />
+                              <span className="truncate">{coll.name}</span>
+                            </button>
+                          ))
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Bulk add tag */}
+                <div className="relative">
+                  {bulkTagOpen ? (
+                    <form
+                      onSubmit={(e) => { e.preventDefault(); handleBulkAddTag(); }}
+                      className="flex items-center gap-1"
+                    >
+                      <input
+                        autoFocus
+                        value={bulkTagInput}
+                        onChange={(e) => setBulkTagInput(e.target.value)}
+                        onBlur={() => { if (!bulkTagInput.trim()) setBulkTagOpen(false); }}
+                        onKeyDown={(e) => e.key === "Escape" && setBulkTagOpen(false)}
+                        placeholder="tag name"
+                        className="w-28 px-2 py-2 bg-card border border-primary/40 rounded-lg text-xs text-foreground focus:outline-none"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!bulkTagInput.trim()}
+                        className="px-2 py-2 bg-primary/10 border border-primary/30 text-primary rounded-lg text-xs hover:bg-primary/20 transition-colors disabled:opacity-40"
+                      >
+                        Add
+                      </button>
+                    </form>
+                  ) : (
+                    <button
+                      onClick={() => { setBulkTagOpen(true); setBulkMoveOpen(false); }}
+                      className="flex items-center gap-2 px-3 py-2 bg-primary/10 border border-primary/30 text-primary rounded-lg text-sm font-medium hover:bg-primary/20 transition-colors"
+                    >
+                      <Tag className="h-4 w-4" />
+                      Tag
+                    </button>
+                  )}
+                </div>
+              </>
             )}
             <button
               onClick={() => setShowUpload(true)}

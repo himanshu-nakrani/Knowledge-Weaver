@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { Bot, Send, Loader2, CheckCircle2, Circle, ChevronDown, ChevronRight, ExternalLink, AlertCircle, Copy, Check } from "lucide-react";
+import { Bot, Send, Loader2, CheckCircle2, Circle, ChevronDown, ChevronRight, ExternalLink, AlertCircle, Copy, Check, Trash2, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const STORAGE_KEY = "mindforge:agent-runs";
+const MAX_SAVED_RUNS = 20;
 
 interface AgentStep {
   step: string;
@@ -38,6 +40,29 @@ const stepIcons: Record<string, string> = {
   answer: "✍️",
 };
 
+function runToMarkdown(run: AgentRun): string {
+  return [
+    `# Agent Run`,
+    `**Query:** ${run.query}`,
+    "",
+    "## Reasoning Trace",
+    "",
+    ...run.steps.map((s) => `### ${stepIcons[s.step] ?? "·"} ${s.label}\n\n${s.detail}`),
+    "",
+    "## Answer",
+    "",
+    run.answer ?? "(no answer)",
+    "",
+    ...(run.sources.length > 0
+      ? [
+          "## Sources",
+          "",
+          ...run.sources.map((s, i) => `[${i + 1}] **${s.documentTitle}** (score: ${s.score.toFixed(2)})\n> ${s.chunkContent}`),
+        ]
+      : []),
+  ].join("\n");
+}
+
 function StepCard({ step, isLast }: { step: AgentStep; isLast: boolean }) {
   const [expanded, setExpanded] = useState(step.status === "done" && (step.step === "answer" || step.step === "reason"));
 
@@ -62,7 +87,7 @@ function StepCard({ step, isLast }: { step: AgentStep; isLast: boolean }) {
         {!isLast && <div className="w-px flex-1 bg-border mt-1" />}
       </div>
 
-      <div className={`flex-1 pb-4 ${isLast ? "" : ""}`}>
+      <div className="flex-1 pb-4">
         <button
           onClick={() => step.detail && setExpanded((e) => !e)}
           className="flex items-center gap-2 w-full text-left"
@@ -107,17 +132,55 @@ function StepCard({ step, isLast }: { step: AgentStep; isLast: boolean }) {
 
 let runCounter = 0;
 
+function loadSavedRuns(): AgentRun[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function Agent() {
   const [input, setInput] = useState("");
-  const [runs, setRuns] = useState<AgentRun[]>([]);
+  const [runs, setRuns] = useState<AgentRun[]>(loadSavedRuns);
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [traceCopiedId, setTraceCopiedId] = useState<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
+
+  // Persist completed runs to localStorage
+  useEffect(() => {
+    const completed = runs.filter((r) => !r.running).slice(-MAX_SAVED_RUNS);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(completed));
+    } catch {
+      // storage full — ignore
+    }
+  }, [runs]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [runs]);
+
+  const clearHistory = () => {
+    setRuns([]);
+    localStorage.removeItem(STORAGE_KEY);
+    toast({ title: "History cleared" });
+  };
+
+  const handleCopyAnswer = (answer: string, runId: number) => {
+    navigator.clipboard.writeText(answer);
+    setCopiedId(runId);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleCopyTrace = (run: AgentRun) => {
+    navigator.clipboard.writeText(runToMarkdown(run));
+    setTraceCopiedId(run.id);
+    setTimeout(() => setTraceCopiedId(null), 2000);
+    toast({ title: "Full trace copied as Markdown" });
+  };
 
   const runAgent = async () => {
     const q = input.trim();
@@ -183,12 +246,6 @@ export default function Agent() {
     }
   };
 
-  const handleCopyAnswer = (answer: string, runId: number) => {
-    navigator.clipboard.writeText(answer);
-    setCopiedId(runId);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
   const activeRun = runs[runs.length - 1];
 
   return (
@@ -196,14 +253,29 @@ export default function Agent() {
       <div className="h-full flex flex-col overflow-hidden">
         {/* Header */}
         <div className="px-6 py-4 border-b border-border shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Bot className="h-4 w-4 text-primary" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Bot className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-foreground">AI Agent</h1>
+                <p className="text-xs text-muted-foreground">Multi-step reasoning with full trace transparency</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-lg font-bold text-foreground">AI Agent</h1>
-              <p className="text-xs text-muted-foreground">Multi-step reasoning with full trace transparency</p>
-            </div>
+            {runs.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">{runs.filter((r) => !r.running).length} saved</span>
+                <button
+                  onClick={clearHistory}
+                  title="Clear history"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border rounded-lg transition-all"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Clear
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -253,6 +325,16 @@ export default function Agent() {
                     <Bot className="h-4 w-4 text-primary" />
                     <span className="text-sm font-medium text-foreground">Agent trace</span>
                     {run.running && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground ml-auto" />}
+                    {!run.running && run.steps.length > 0 && (
+                      <button
+                        onClick={() => handleCopyTrace(run)}
+                        title="Copy full trace as Markdown"
+                        className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {traceCopiedId === run.id ? <Check className="h-3.5 w-3.5 text-green-400" /> : <FileText className="h-3.5 w-3.5" />}
+                        {traceCopiedId === run.id ? "Copied!" : "Export trace"}
+                      </button>
+                    )}
                   </div>
                   <div className="pl-1">
                     {run.steps.map((step, i) => (
@@ -302,7 +384,6 @@ export default function Agent() {
         <div className="border-t border-border p-4 shrink-0">
           <div className="flex gap-3 items-end">
             <textarea
-              ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}

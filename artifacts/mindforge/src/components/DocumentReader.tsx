@@ -1,6 +1,10 @@
-import { useState } from "react";
-import { X, ExternalLink, FileText, File, Github, Globe, Tag, Layers, Clock, Hash, Zap, BookOpen, GitBranch, List, Download } from "lucide-react";
-import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
+import { X, ExternalLink, FileText, File, Github, Globe, Tag, Layers, Clock, Hash, Zap, BookOpen, GitBranch, List, Download, Sparkles, Network, Loader2, RefreshCw } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useQueryClient } from "@tanstack/react-query";
+import { getListDocumentsQueryKey } from "@workspace/api-client-react";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 interface Doc {
   id: number;
@@ -14,10 +18,19 @@ interface Doc {
   updatedAt: string;
 }
 
+interface RelatedDoc {
+  id: number;
+  title: string;
+  type: string;
+  score: number;
+  tags: string[];
+}
+
 interface DocumentReaderProps {
   doc: Doc;
   onClose: () => void;
   onTool?: (type: "summarize" | "actions" | "flashcards" | "mindmap", docId: number) => void;
+  onOpenDoc?: (id: number) => void;
 }
 
 const typeIcon: Record<string, React.ReactNode> = {
@@ -46,15 +59,9 @@ function renderContent(type: string, content: string) {
   const lines = content.split("\n");
   return lines.map((line, i) => {
     if (type === "markdown" || type === "github" || type === "url") {
-      if (/^## /.test(line)) {
-        return <h2 key={i} className="text-base font-semibold text-foreground mt-5 mb-1.5">{line.slice(3)}</h2>;
-      }
-      if (/^### /.test(line)) {
-        return <h3 key={i} className="text-sm font-semibold text-foreground/90 mt-4 mb-1">{line.slice(4)}</h3>;
-      }
-      if (/^# /.test(line)) {
-        return <h1 key={i} className="text-lg font-bold text-foreground mt-2 mb-2">{line.slice(2)}</h1>;
-      }
+      if (/^## /.test(line)) return <h2 key={i} className="text-base font-semibold text-foreground mt-5 mb-1.5">{line.slice(3)}</h2>;
+      if (/^### /.test(line)) return <h3 key={i} className="text-sm font-semibold text-foreground/90 mt-4 mb-1">{line.slice(4)}</h3>;
+      if (/^# /.test(line)) return <h1 key={i} className="text-lg font-bold text-foreground mt-2 mb-2">{line.slice(2)}</h1>;
       if (/^- /.test(line) || /^\* /.test(line)) {
         return (
           <div key={i} className="flex items-start gap-2 my-0.5">
@@ -63,9 +70,7 @@ function renderContent(type: string, content: string) {
           </div>
         );
       }
-      if (/^```/.test(line)) {
-        return <div key={i} className="font-mono text-xs text-muted-foreground bg-muted rounded px-2 py-0.5 my-0.5">{line}</div>;
-      }
+      if (/^```/.test(line)) return <div key={i} className="font-mono text-xs text-muted-foreground bg-muted rounded px-2 py-0.5 my-0.5">{line}</div>;
     }
     if (!line.trim()) return <div key={i} className="h-2" />;
     return <p key={i} className="text-sm text-foreground/85 leading-relaxed my-0.5">{line}</p>;
@@ -82,9 +87,75 @@ function exportAsMarkdown(doc: Doc) {
   URL.revokeObjectURL(a.href);
 }
 
-export function DocumentReader({ doc, onClose, onTool }: DocumentReaderProps) {
-  const [tab, setTab] = useState<"content" | "meta">("content");
+export function DocumentReader({ doc, onClose, onTool, onOpenDoc }: DocumentReaderProps) {
+  const [tab, setTab] = useState<"content" | "summary" | "related" | "meta">("content");
   const { words, mins } = readingTime(doc.content);
+  const queryClient = useQueryClient();
+
+  // Summary state
+  const [summary, setSummary] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
+  // Related state
+  const [related, setRelated] = useState<RelatedDoc[] | null>(null);
+  const [relatedLoading, setRelatedLoading] = useState(false);
+
+  // Auto-tag state
+  const [autoTagging, setAutoTagging] = useState(false);
+  const [tagSuccess, setTagSuccess] = useState(false);
+
+  const loadSummary = async () => {
+    setSummaryLoading(true);
+    try {
+      const res = await fetch(`${BASE}/api/documents/${doc.id}/summarize`, { method: "POST" });
+      const data = await res.json() as { summary: string };
+      setSummary(data.summary);
+    } catch {
+      setSummary("Failed to generate summary. Please try again.");
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
+  const loadRelated = async () => {
+    setRelatedLoading(true);
+    try {
+      const res = await fetch(`${BASE}/api/documents/${doc.id}/related`);
+      const data = await res.json() as RelatedDoc[];
+      setRelated(data);
+    } catch {
+      setRelated([]);
+    } finally {
+      setRelatedLoading(false);
+    }
+  };
+
+  const handleAutoTag = async () => {
+    setAutoTagging(true);
+    try {
+      await fetch(`${BASE}/api/documents/${doc.id}/auto-tag`, { method: "POST" });
+      queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });
+      setTagSuccess(true);
+      setTimeout(() => setTagSuccess(false), 3000);
+    } catch {
+      // ignore
+    } finally {
+      setAutoTagging(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === "summary" && !summary && !summaryLoading) loadSummary();
+    if (tab === "related" && !related && !relatedLoading) loadRelated();
+  }, [tab]);
+
+  const typeIconBig: Record<string, React.ReactNode> = {
+    pdf: <File className="h-3 w-3 text-orange-400" />,
+    markdown: <FileText className="h-3 w-3 text-blue-400" />,
+    text: <FileText className="h-3 w-3 text-green-400" />,
+    github: <Github className="h-3 w-3 text-purple-400" />,
+    url: <Globe className="h-3 w-3 text-cyan-400" />,
+  };
 
   return (
     <motion.div
@@ -172,15 +243,17 @@ export function DocumentReader({ doc, onClose, onTool }: DocumentReaderProps) {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-border shrink-0">
+        <div className="flex border-b border-border shrink-0 overflow-x-auto">
           {[
             { id: "content" as const, label: "Content" },
+            { id: "summary" as const, label: "✨ Summary" },
+            { id: "related" as const, label: "🔗 Related" },
             { id: "meta" as const, label: "Details" },
           ].map(({ id, label }) => (
             <button
               key={id}
               onClick={() => setTab(id)}
-              className={`px-5 py-2.5 text-sm font-medium transition-colors ${
+              className={`px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${
                 tab === id ? "text-primary border-b-2 border-primary -mb-px" : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -196,6 +269,109 @@ export function DocumentReader({ doc, onClose, onTool }: DocumentReaderProps) {
               {renderContent(doc.type, doc.content)}
             </div>
           )}
+
+          {tab === "summary" && (
+            <div className="space-y-4">
+              {summaryLoading ? (
+                <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="text-sm">Generating summary...</span>
+                </div>
+              ) : summary ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium text-foreground">AI Summary</span>
+                    </div>
+                    <button
+                      onClick={loadSummary}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <RefreshCw className="h-3 w-3" /> Regenerate
+                    </button>
+                  </div>
+                  <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
+                    <p className="text-sm text-foreground leading-relaxed">{summary}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Based on {words.toLocaleString()} words · {doc.chunkCount} indexed chunks
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
+                  <div className="w-14 h-14 rounded-xl bg-primary/5 border border-primary/10 flex items-center justify-center">
+                    <Sparkles className="h-7 w-7 text-primary/40" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground mb-1">Generate AI Summary</p>
+                    <p className="text-xs text-muted-foreground max-w-xs">Get a concise 2-4 sentence overview of this document's key ideas.</p>
+                  </div>
+                  <button
+                    onClick={loadSummary}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+                  >
+                    <Sparkles className="h-4 w-4" /> Generate Summary
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === "related" && (
+            <div className="space-y-3">
+              {relatedLoading ? (
+                <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="text-sm">Finding related documents...</span>
+                </div>
+              ) : related !== null ? (
+                related.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+                    <Network className="h-8 w-8 text-muted-foreground/40" />
+                    <div>
+                      <p className="font-medium text-foreground mb-1">No related documents found</p>
+                      <p className="text-xs text-muted-foreground">Add more documents to your library to discover connections.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Network className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium text-foreground">{related.length} related documents</span>
+                      <button onClick={loadRelated} className="ml-auto text-xs text-muted-foreground hover:text-foreground transition-colors">
+                        <RefreshCw className="h-3 w-3" />
+                      </button>
+                    </div>
+                    {related.map((r) => (
+                      <button
+                        key={r.id}
+                        onClick={() => onOpenDoc?.(r.id)}
+                        className="w-full flex items-start gap-3 p-3 bg-muted/40 hover:bg-muted border border-border hover:border-primary/30 rounded-xl transition-all text-left group"
+                      >
+                        <div className="mt-0.5 shrink-0">{typeIconBig[r.type] ?? <FileText className="h-3 w-3 text-muted-foreground" />}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground group-hover:text-primary transition-colors truncate">{r.title}</p>
+                          {r.tags.length > 0 && (
+                            <div className="flex gap-1 mt-1 flex-wrap">
+                              {r.tags.slice(0, 3).map((t) => (
+                                <span key={t} className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded">{t}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className="text-xs font-medium text-primary">{Math.round(r.score * 100)}%</div>
+                          <div className="text-[10px] text-muted-foreground">match</div>
+                        </div>
+                      </button>
+                    ))}
+                  </>
+                )
+              ) : null}
+            </div>
+          )}
+
           {tab === "meta" && (
             <div className="space-y-4">
               {[
@@ -223,19 +399,27 @@ export function DocumentReader({ doc, onClose, onTool }: DocumentReaderProps) {
               )}
               <div className="flex items-start gap-4">
                 <span className="text-xs text-muted-foreground w-28 shrink-0 pt-0.5">Tags</span>
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-1 flex-1">
                   {doc.tags.length > 0 ? doc.tags.map((t) => (
                     <span key={t} className="px-1.5 py-0.5 bg-primary/10 text-primary text-xs rounded font-medium">{t}</span>
                   )) : <span className="text-sm text-muted-foreground">No tags</span>}
                 </div>
               </div>
-              <div className="pt-2 border-t border-border">
+              <div className="pt-3 border-t border-border flex flex-wrap gap-2">
                 <button
                   onClick={() => exportAsMarkdown(doc)}
                   className="flex items-center gap-2 px-3 py-2 bg-muted border border-border rounded-lg text-sm text-foreground hover:border-primary/30 transition-all"
                 >
                   <Download className="h-4 w-4 text-primary" />
-                  Download as Markdown (.md)
+                  Download as .md
+                </button>
+                <button
+                  onClick={handleAutoTag}
+                  disabled={autoTagging}
+                  className="flex items-center gap-2 px-3 py-2 bg-muted border border-border rounded-lg text-sm text-foreground hover:border-amber-400/30 hover:text-amber-400 transition-all disabled:opacity-50"
+                >
+                  {autoTagging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  {tagSuccess ? "Tags updated!" : autoTagging ? "Tagging..." : "AI Auto-tag"}
                 </button>
               </div>
             </div>

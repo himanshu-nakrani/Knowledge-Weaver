@@ -13,10 +13,11 @@ import {
   IngestGithubRepoBody,
 } from "@workspace/api-zod";
 import { chunkText, extractHeadingsAndCode } from "../lib/chunker";
-import { addChunks, removeChunks, getChunksForDocument } from "../lib/vectorStore";
+import { addChunks, removeChunks, getChunksForDocument, similaritySearch } from "../lib/vectorStore";
 import { scrapeGithubRepo } from "../lib/github";
 import { parsePdfBuffer } from "../lib/pdfParser";
 import { scrapeWebPage } from "../lib/webScraper";
+import { extractTags, generateSummary } from "../lib/groq";
 import crypto from "node:crypto";
 
 const router: IRouter = Router();
@@ -354,6 +355,50 @@ router.get("/documents/:id/chunks", async (req, res): Promise<void> => {
   res.json(chunks.map((c) => ({
     id: c.id, content: c.content, documentId: c.documentId, chunkIndex: c.chunkIndex, score: null,
   })));
+});
+
+/** AI-generated summary */
+router.post("/documents/:id/summarize", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [doc] = await db.select().from(documentsTable).where(eq(documentsTable.id, id));
+  if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
+  const summary = await generateSummary(doc.title, doc.content);
+  res.json({ summary });
+});
+
+/** Related documents via BM25 */
+router.get("/documents/:id/related", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [doc] = await db.select().from(documentsTable).where(eq(documentsTable.id, id));
+  if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
+  const query = `${doc.title} ${doc.tags.join(" ")} ${doc.content.slice(0, 300)}`;
+  const chunks = await similaritySearch(query, 10);
+  const seen = new Set<number>();
+  const related: { id: number; title: string; type: string; score: number; tags: string[] }[] = [];
+  for (const chunk of chunks) {
+    if (chunk.documentId === id || seen.has(chunk.documentId)) continue;
+    seen.add(chunk.documentId);
+    const relDoc = await db.select().from(documentsTable).where(eq(documentsTable.id, chunk.documentId)).then((r) => r[0]);
+    if (relDoc && !relDoc.deletedAt) {
+      related.push({ id: relDoc.id, title: relDoc.title, type: relDoc.type, score: chunk.score, tags: relDoc.tags });
+    }
+    if (related.length >= 5) break;
+  }
+  res.json(related);
+});
+
+/** Auto-tag a document using LLM */
+router.post("/documents/:id/auto-tag", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [doc] = await db.select().from(documentsTable).where(eq(documentsTable.id, id));
+  if (!doc) { res.status(404).json({ error: "Document not found" }); return; }
+  const newTags = await extractTags(doc.title, doc.content);
+  const merged = Array.from(new Set([...doc.tags, ...newTags]));
+  const [updated] = await db.update(documentsTable).set({ tags: merged }).where(eq(documentsTable.id, id)).returning();
+  res.json(formatDoc(updated, getChunksForDocument(id).length));
 });
 
 /** Full data export */

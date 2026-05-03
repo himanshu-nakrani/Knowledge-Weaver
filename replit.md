@@ -104,10 +104,21 @@ lib/
 - `GET /api/agent/run?content=...` — SSE endpoint streaming multi-step trace: plan → retrieve → websearch → reason → answer
 - `/agent` frontend page: collapsible step cards with status icons, source attribution, example prompts
 
+### Phase 12 (AI Enhancements + UX Polish)
+- **groq.ts**: `extractTags(title, content)` — LLM extracts 3-7 tags; `generateSummary(title, content)` — concise 2-4 sentence overview
+- **Document endpoints**: `POST /documents/:id/summarize`, `GET /documents/:id/related` (BM25 similarity), `POST /documents/:id/auto-tag` (LLM tags saved back to doc)
+- **DocumentReader**: "✨ Summary" tab (lazy-loads AI summary, regenerate button), "🔗 Related" tab (similarity-ranked list, click to open), "AI Auto-tag" button in Details tab
+- **Query analytics**: in-memory ring buffer (`trackQuery()`) called on every chat + agent query; `GET /stats/queries` endpoint; analytics widget in Settings
+- **Rate limiting**: `rateLimiter(n, windowMs)` Express middleware (8 req/min on `/agent/run`)
+- **LLM model selector**: 4 Groq model options in Settings (radio buttons); stored in `localStorage` via `usePreferences`
+- **Collection inline rename**: double-click collection name in sidebar → inline input; pencil icon on hover; PATCH `/collections/:id`
+- **Bulk operations**: Select mode gains "Move" (collection picker dropdown) and "Tag" (inline input) toolbar buttons; parallel PATCH calls
+- **Agent persistence**: completed runs saved/loaded from `localStorage`; "Clear history" button; "Export trace" → copies full Markdown to clipboard
+
 ### Quick Wins
 - Dark/light theme toggle (⌘\\ or sidebar button), stored in localStorage
 - Keyboard shortcuts modal (`?` key) via `ShortcutsModal.tsx`
 - Document copy-to-clipboard button on cards
 - Document duplicate button (`POST /documents/:id/duplicate`)
-- Bulk select mode in Document Library with batch delete
+- Bulk select mode in Document Library with batch delete, bulk move, bulk tag
 - Knowledge Graph + AI Agent entries in nav sidebar and Cmd+K palette

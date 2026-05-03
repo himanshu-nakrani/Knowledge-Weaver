@@ -100,6 +100,47 @@ export function shouldUseWebSearch(query: string, hasRelevantDocs: boolean): boo
 }
 
 /**
+ * Extracts relevant tags from document content using an LLM.
+ */
+export async function extractTags(title: string, content: string): Promise<string[]> {
+  if (!process.env.GROQ_API_KEY) return [];
+  try {
+    const snippet = content.slice(0, 1500);
+    const prompt = `Extract 3-7 concise topic tags for this document. Tags should be lowercase, single words or short hyphenated phrases.
+
+Title: "${title}"
+Content snippet: "${snippet}"
+
+Respond with ONLY a comma-separated list of tags, nothing else:`;
+    const result = await chatCompletion([{ role: "user", content: prompt }], 0.2, 100);
+    return result
+      .split(",")
+      .map((t) => t.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""))
+      .filter((t) => t.length > 0 && t.length < 30)
+      .slice(0, 7);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Generates a concise 2-4 sentence summary of document content.
+ */
+export async function generateSummary(title: string, content: string): Promise<string> {
+  if (!process.env.GROQ_API_KEY) {
+    return "AI summaries require GROQ_API_KEY to be configured.";
+  }
+  const snippet = content.slice(0, 3000);
+  const prompt = `Write a concise 2-4 sentence summary of this document. Focus on the key ideas and takeaways.
+
+Title: "${title}"
+Content: "${snippet}"
+
+Summary:`;
+  return chatCompletion([{ role: "user", content: prompt }], 0.4, 300);
+}
+
+/**
  * Expands a user query into multiple semantically related search terms
  * to improve BM25 recall. Returns the original query plus synonyms/related terms.
  */
