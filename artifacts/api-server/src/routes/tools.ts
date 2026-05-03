@@ -139,4 +139,25 @@ router.delete("/tools/flashcard-decks/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
+// Spaced repetition update (SM-2 algorithm)
+router.patch("/tools/flashcard-decks/:id/review", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { srData, streak } = req.body as { srData?: unknown; streak?: unknown };
+  if (typeof srData !== "object" || srData === null) {
+    res.status(400).json({ error: "srData must be an object" });
+    return;
+  }
+
+  const [deck] = await db
+    .update(flashcardDecksTable)
+    .set({ srData, streak: typeof streak === "number" ? streak : 0, lastReviewedAt: new Date() })
+    .where(eq(flashcardDecksTable.id, id))
+    .returning();
+
+  if (!deck) { res.status(404).json({ error: "Deck not found" }); return; }
+  res.json(deck);
+});
+
 export default router;

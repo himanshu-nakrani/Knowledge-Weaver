@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import {
   useListDocuments,
@@ -10,7 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { UploadModal } from "@/components/UploadModal";
 import { DocumentReader } from "@/components/DocumentReader";
 import { ToolResultModal } from "@/components/ToolResultModal";
-import { Search, Plus, Trash2, FileText, File, Github, Globe, ExternalLink, BookOpen, Pin, PinOff, Copy, Share2, GitBranch, CheckSquare, Square, FolderOpen } from "lucide-react";
+import { Search, Plus, Trash2, FileText, File, Github, Globe, ExternalLink, BookOpen, Pin, PinOff, Copy, Share2, GitBranch, CheckSquare, Square, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 
@@ -45,6 +45,8 @@ export default function Documents() {
   const [shareModalDocId, setShareModalDocId] = useState<number | null>(null);
   const [shareInfo, setShareInfo] = useState<{ token: string; url: string } | null>(null);
   const [filterCollection, setFilterCollection] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "title" | "type">("newest");
+  const [showSortMenu, setShowSortMenu] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -54,8 +56,18 @@ export default function Documents() {
   const resolvedReader = readerDoc ? (docs.find((d) => d.id === readerDoc.id) ?? readerDoc) : null;
 
   const allTags = Array.from(new Set(docs.flatMap((d) => d.tags)));
-  const pinnedDocs = docs.filter((d) => d.pinned);
-  const unpinnedDocs = docs.filter((d) => !d.pinned);
+
+  const sortedDocs = useMemo(() => {
+    const copy = [...docs];
+    if (sortBy === "newest") copy.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    else if (sortBy === "oldest") copy.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    else if (sortBy === "title") copy.sort((a, b) => a.title.localeCompare(b.title));
+    else if (sortBy === "type") copy.sort((a, b) => a.type.localeCompare(b.type));
+    return copy;
+  }, [docs, sortBy]);
+
+  const pinnedDocs = sortedDocs.filter((d) => d.pinned);
+  const unpinnedDocs = sortedDocs.filter((d) => !d.pinned);
   const collectionLabel = filterCollection ? `Collection #${filterCollection}` : null;
 
   const handleDelete = async (id: number) => {
@@ -252,6 +264,31 @@ export default function Documents() {
               className="w-full pl-9 pr-4 py-2 bg-card border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
             />
           </div>
+          {/* Sort dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowSortMenu((v) => !v)}
+              onBlur={() => setTimeout(() => setShowSortMenu(false), 120)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              {sortBy === "newest" ? "Newest" : sortBy === "oldest" ? "Oldest" : sortBy === "title" ? "Title A–Z" : "By Type"}
+            </button>
+            {showSortMenu && (
+              <div className="absolute right-0 top-full mt-1 w-36 bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
+                {(["newest", "oldest", "title", "type"] as const).map((opt) => (
+                  <button
+                    key={opt}
+                    onMouseDown={() => { setSortBy(opt); setShowSortMenu(false); }}
+                    className={`w-full text-left px-3 py-2 text-xs transition-colors ${sortBy === opt ? "bg-primary/10 text-primary font-medium" : "text-foreground hover:bg-accent"}`}
+                  >
+                    {opt === "newest" ? "Newest first" : opt === "oldest" ? "Oldest first" : opt === "title" ? "Title A–Z" : "By type"}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => { setFilterTag(null); setFilterCollection(null); }}

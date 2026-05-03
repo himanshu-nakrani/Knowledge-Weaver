@@ -33,13 +33,13 @@ artifacts/
         layout/       # AppLayout (sidebar + user + theme toggle + shortcuts)
         ChatArea, DocumentSidebar, UploadModal, ToolResultModal, CommandPalette,
         QuickNoteModal, DocumentReader, ShortcutsModal
-      hooks/          # useTheme.ts (dark/light localStorage toggle)
+      hooks/          # useTheme.ts (dark/light localStorage toggle), usePreferences.ts (localStorage: topK, webSearch, cardsPerDeck, compactView)
 
 lib/
   api-spec/           # OpenAPI spec (source of truth)
   api-client-react/   # Generated React Query hooks
   api-zod/            # Generated Zod schemas
-  db/                 # Drizzle DB client + schema (documents, chat, activity, flashcards, auth/sessions, users, collections)
+  db/                 # Drizzle DB client + schema (documents, chat, activity, flashcards[+srData/streak/lastReviewedAt], auth/sessions, users, collections)
   replit-auth-web/    # useAuth() React hook for Replit OIDC
 ```
 

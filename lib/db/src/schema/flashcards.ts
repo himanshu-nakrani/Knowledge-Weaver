@@ -7,6 +7,9 @@ export const flashcardDecksTable = pgTable("flashcard_decks", {
   deckTitle: text("deck_title").notNull(),
   flashcards: jsonb("flashcards").notNull(),
   cardCount: integer("card_count").notNull().default(0),
+  srData: jsonb("sr_data").notNull().default({}),
+  lastReviewedAt: timestamp("last_reviewed_at", { withTimezone: true }),
+  streak: integer("streak").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

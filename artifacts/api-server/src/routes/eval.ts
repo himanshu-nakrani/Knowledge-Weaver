@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { GetRetrievedChunksQueryParams } from "@workspace/api-zod";
-import { getLastEval } from "../lib/evalStore";
+import { getLastEval, getEvalHistory } from "../lib/evalStore";
 
 const router: IRouter = Router();
 
@@ -24,6 +24,11 @@ router.get("/eval/chunks", async (req, res): Promise<void> => {
   }
 
   res.json(evalData);
+});
+
+router.get("/eval/history", async (_req, res): Promise<void> => {
+  const history = getEvalHistory();
+  res.json(history);
 });
 
 export default router;
