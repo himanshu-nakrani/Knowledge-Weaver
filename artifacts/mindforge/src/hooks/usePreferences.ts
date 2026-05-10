@@ -25,9 +25,12 @@ const DEFAULTS: Preferences = {
   llmModel: "llama-3.3-70b-versatile",
 };
 
+const PREFS_KEY = "yukara:preferences";
+const LEGACY_PREFS_KEY = "mindforge:preferences";
+
 function loadPrefs(): Preferences {
   try {
-    const raw = localStorage.getItem("mindforge:preferences");
+    const raw = localStorage.getItem(PREFS_KEY) ?? localStorage.getItem(LEGACY_PREFS_KEY);
     if (!raw) return DEFAULTS;
     return { ...DEFAULTS, ...JSON.parse(raw) };
   } catch {
@@ -41,13 +44,13 @@ export function usePreferences() {
   const setPrefs = useCallback((updates: Partial<Preferences>) => {
     setPrefsState((prev) => {
       const next = { ...prev, ...updates };
-      localStorage.setItem("mindforge:preferences", JSON.stringify(next));
+      localStorage.setItem(PREFS_KEY, JSON.stringify(next));
       return next;
     });
   }, []);
 
   const resetPrefs = useCallback(() => {
-    localStorage.removeItem("mindforge:preferences");
+    localStorage.removeItem(PREFS_KEY);
     setPrefsState(DEFAULTS);
   }, []);
 

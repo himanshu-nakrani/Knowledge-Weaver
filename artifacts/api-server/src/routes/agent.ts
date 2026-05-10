@@ -147,7 +147,7 @@ List 2-4 key insights. Be concise.`;
 
     sseWrite(res, { type: "step", step: "answer", status: "running", label: "Generating answer", detail: "Composing final response..." });
 
-    const answerPrompt = `You are MindForge, a knowledge assistant operating in ${mode} mode. ${cfg.answerInstruction}
+    const answerPrompt = `You are yukara, a knowledge assistant operating in ${mode} mode. ${cfg.answerInstruction}
 
 ${docContext ? `Knowledge base context:\n${docContext}` : "No relevant documents found."}
 ${webContext ? `\nWeb context:\n${webContext}` : ""}

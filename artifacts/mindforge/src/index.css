@@ -293,3 +293,30 @@
     inset: -1px;
   }
 }
+
+.landing-page {
+  max-width: 100vw;
+}
+
+.landing-product-preview {
+  max-width: min(64rem, calc(100vw - 2.5rem));
+}
+
+.landing-hero-title {
+  max-width: 9ch;
+  font-size: 2.5rem;
+}
+
+.landing-hero-copy {
+  max-width: 19rem;
+}
+
+@media (min-width: 640px) {
+  .landing-hero-title {
+    max-width: 56rem;
+  }
+
+  .landing-hero-copy {
+    max-width: 42rem;
+  }
+}

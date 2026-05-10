@@ -19,7 +19,7 @@ export async function scrapeGithubRepo(url: string): Promise<GithubContent> {
 
   const headers: Record<string, string> = {
     Accept: "application/vnd.github.v3+json",
-    "User-Agent": "MindForge/1.0",
+    "User-Agent": "yukara/1.0",
   };
   if (process.env.GITHUB_TOKEN) {
     headers["Authorization"] = `token ${process.env.GITHUB_TOKEN}`;

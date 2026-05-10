@@ -42,7 +42,7 @@ interface AppLayoutProps {
 }
 
 const navItems = [
-  { href: "/", icon: Brain, label: "Workspace" },
+  { href: "/workspace", icon: Brain, label: "Workspace" },
   { href: "/documents", icon: FileText, label: "Library" },
   { href: "/flashcards", icon: BookOpen, label: "Flashcards" },
   { href: "/knowledge-graph", icon: Network, label: "Knowledge Graph" },
@@ -162,6 +162,7 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
     : null;
 
   const PRESET_COLORS = ["#6366f1", "#f59e0b", "#10b981", "#3b82f6", "#ec4899", "#f97316", "#8b5cf6"];
+  const safeSessions = Array.isArray(sessions) ? sessions : [];
 
   const NavContent = () => (
     <div className="flex flex-col h-full border-r border-border" style={{ background: "hsl(220 15% 5%)" }}>
@@ -171,7 +172,7 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
           <Brain className="h-4 w-4 text-primary" />
         </div>
         <div className="hidden lg:flex flex-1 items-center justify-between min-w-0">
-          <span className="font-bold text-base text-foreground tracking-tight">MindForge</span>
+          <span className="font-bold text-base text-foreground tracking-tight">yukara</span>
           <div className="flex items-center gap-1">
             <kbd className="text-[10px] text-muted-foreground border border-border rounded px-1 py-0.5 font-mono">⌘K</kbd>
             <kbd className="text-[10px] text-muted-foreground border border-border rounded px-1 py-0.5 font-mono">?</kbd>
@@ -182,7 +183,7 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
       {/* Nav */}
       <nav className="px-2 py-3 space-y-0.5">
         {navItems.map((item) => {
-          const isActive = item.href === "/" ? location === "/" : (location.startsWith(item.href) && !activeCollectionId);
+          const isActive = location.startsWith(item.href) && !activeCollectionId;
           return (
             <Link key={item.href} href={item.href}>
               <div
@@ -392,7 +393,7 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
             )}
           </div>
           <div className="flex-1 overflow-y-auto px-2 space-y-0.5">
-            {sessions.map((s) => (
+            {safeSessions.map((s) => (
               <div
                 key={s.id}
                 onClick={() => onSelectSession?.(s.id)}
@@ -499,7 +500,7 @@ export function AppLayout({ children, sessions, activeSid, onSelectSession, onNe
           </SheetContent>
         </Sheet>
         <Brain className="h-4 w-4 text-primary" />
-        <span className="font-bold text-sm">MindForge</span>
+        <span className="font-bold text-sm">yukara</span>
         <div className="ml-auto flex items-center gap-1">
           <kbd className="text-[10px] text-muted-foreground border border-border rounded px-1.5 py-0.5 font-mono">⌘K</kbd>
           <button onClick={() => setShowNote(true)} className="p-1.5 text-muted-foreground hover:text-amber-400 transition-colors rounded">

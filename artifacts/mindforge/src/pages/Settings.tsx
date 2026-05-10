@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Key, Brain, Globe, Info, Download, Loader2, Sliders, RotateCcw, BarChart2, TrendingUp, Clock, Tag, Plus, X, Sparkles, Check } from "lucide-react";
 import { usePreferences, GROQ_MODELS } from "@/hooks/usePreferences";
 
-const AUTOTAG_RULES_KEY = "mindforge:autotag-rules";
+const AUTOTAG_RULES_KEY = "yukara:autotag-rules";
 
 interface AutoTagRule { id: string; keyword: string; tag: string }
 
@@ -109,7 +109,7 @@ export default function Settings() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `mindforge-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `yukara-export-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } finally {
@@ -122,7 +122,7 @@ export default function Settings() {
       <div className="h-full flex flex-col p-6 overflow-y-auto">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-foreground">Settings</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Configure your MindForge knowledge base</p>
+          <p className="text-muted-foreground text-sm mt-0.5">Configure your yukara knowledge base</p>
         </div>
 
         <div className="space-y-4 max-w-2xl">
@@ -442,10 +442,10 @@ export default function Settings() {
           <div className="bg-card border border-border rounded-xl p-5">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2 bg-primary/10 rounded-lg"><Info className="h-4 w-4 text-primary" /></div>
-              <h2 className="font-semibold text-foreground">About MindForge</h2>
+              <h2 className="font-semibold text-foreground">About yukara</h2>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              MindForge is a personal second brain powered by adaptive RAG. Upload documents, notes, and code — then ask questions across your entire knowledge base with spaced repetition flashcards, knowledge graphs, and an AI reasoning agent.
+              yukara is a personal knowledge workspace powered by adaptive RAG. Upload documents, notes, and code, then ask questions across your entire knowledge base with spaced repetition flashcards, knowledge graphs, and an AI reasoning agent.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {["Groq LLaMA 3.3", "BM25 + RAG", "Tavily Search", "Mermaid Graphs", "AI Flashcards", "Spaced Repetition", "Collections", "Document Sharing", "AI Agent", "Auto-tagging"].map((tag) => (

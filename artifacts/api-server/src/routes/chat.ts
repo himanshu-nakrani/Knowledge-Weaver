@@ -119,7 +119,7 @@ async function buildChatContext(sessionId: number, userContent: string) {
     .map((c, i) => `[Source ${i + 1}: ${c.documentTitle}]\n${c.content}`)
     .join("\n\n---\n\n");
 
-  const systemPrompt = `You are MindForge, an intelligent personal knowledge assistant. You help users explore and understand their knowledge base.
+  const systemPrompt = `You are yukara, an intelligent personal knowledge assistant. You help users explore and understand their knowledge base.
 
 ${docContext ? `Relevant knowledge from the user's documents:\n\n${docContext}` : "No directly relevant documents found."}
 ${webContext ? `\n\nFresh web information:\n\n${webContext}` : ""}

@@ -90,7 +90,8 @@ export default function Home() {
   const [activeSid, setActiveSid] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
-  const { data: sessions = [] } = useListChatSessions();
+  const { data: sessionsData = [] } = useListChatSessions();
+  const sessions = Array.isArray(sessionsData) ? sessionsData : [];
   const createSession = useCreateChatSession();
 
   useEffect(() => {

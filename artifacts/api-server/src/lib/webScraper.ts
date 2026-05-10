@@ -12,7 +12,7 @@ export async function scrapeWebPage(url: string): Promise<ScrapedPage> {
 
   const res = await fetch(url, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; MindForge/1.0; +https://mindforge.app)",
+      "User-Agent": "Mozilla/5.0 (compatible; yukara/1.0; +https://yukara.app)",
       "Accept": "text/html,application/xhtml+xml",
     },
     signal: AbortSignal.timeout(15_000),

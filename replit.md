@@ -1,4 +1,4 @@
-# MindForge — Personal Second Brain AI
+# yukara — Personal Knowledge AI
 
 ## Overview
 
@@ -8,7 +8,7 @@ Full-stack personal knowledge base app with adaptive RAG, AI agent traces, knowl
 
 - **Monorepo**: pnpm workspaces
 - **Node.js**: 24 | **TypeScript**: 5.9 | **Package manager**: pnpm
-- **Frontend**: React + Vite (Tailwind v4, dark/light glassmorphism UI) — `artifacts/mindforge` → path `/`
+- **Frontend**: React + Vite (Tailwind v4, dark/light glassmorphism UI) — `artifacts/mindforge` → landing path `/`, workspace path `/workspace`
 - **Backend**: Express 5 + Drizzle ORM + PostgreSQL — `artifacts/api-server` → path `/api`
 - **Auth**: Replit OIDC (openid-client) — `lib/replit-auth-web` hook, cookie session stored in DB
 - **LLM**: Groq (llama-3.3-70b-versatile) — requires `GROQ_API_KEY` env var
@@ -55,7 +55,7 @@ lib/
 - **Query expansion**: `expandQuery()` in `groq.ts` uses Groq to expand user queries for better BM25 recall; wired into `chat.ts` `buildChatContext`
 - **Codegen script** in `lib/api-spec/package.json` patches `lib/api-zod/src/index.ts` after orval runs — do not change
 - **Tailwind v4**: no `@apply dark` — use `document.documentElement.classList.add("dark")` in `main.tsx` instead
-- **Theme**: stored in `localStorage` key `mindforge-theme` (dark/light); initialized in `main.tsx`; `useTheme` hook in `artifacts/mindforge/src/hooks/useTheme.ts`
+- **Theme**: stored in `localStorage` key `yukara-theme` (dark/light, with legacy migration); initialized in `main.tsx`; `useTheme` hook in `artifacts/mindforge/src/hooks/useTheme.ts`
 - **Zod in api-server**: use `import { z } from "zod"` (NOT `"zod/v4"` — esbuild can't resolve it)
 - **Soft delete**: deleting a document sets `deletedAt`, moves it to Trash; `/documents/trash` lists them; restore via PATCH `/documents/:id/restore`; permanent delete via DELETE `/documents/:id/permanent`
 - **Pin**: PATCH `/documents/:id/pin` toggles pinned boolean; pinned docs appear first in Library

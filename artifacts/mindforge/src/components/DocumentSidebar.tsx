@@ -25,9 +25,11 @@ export function DocumentSidebar() {
   const [showUpload, setShowUpload] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: docs = [] } = useListDocuments({ search: search || undefined });
+  const { data: docsData = [] } = useListDocuments({ search: search || undefined });
   const { data: stats } = useGetStatsOverview();
-  const { data: activity = [] } = useGetStatsActivity();
+  const { data: activityData = [] } = useGetStatsActivity();
+  const docs = Array.isArray(docsData) ? docsData : [];
+  const activity = Array.isArray(activityData) ? activityData : [];
 
   const allTags = Array.from(new Set(docs.flatMap((d) => d.tags))).slice(0, 8);
 

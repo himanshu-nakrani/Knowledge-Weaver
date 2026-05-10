@@ -77,7 +77,7 @@ export default function SharedDocument() {
         <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Brain className="h-5 w-5 text-primary" />
-            <span className="font-bold text-foreground">MindForge</span>
+            <span className="font-bold text-foreground">yukara</span>
           </div>
           <span className="text-xs text-muted-foreground border border-border rounded-full px-2.5 py-1">
             Shared document
@@ -153,7 +153,7 @@ export default function SharedDocument() {
             <div className="border-t border-border pt-6 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Brain className="h-4 w-4 text-primary" />
-                <span className="text-sm text-muted-foreground">Shared via <span className="text-foreground font-medium">MindForge</span></span>
+                <span className="text-sm text-muted-foreground">Shared via <span className="text-foreground font-medium">yukara</span></span>
               </div>
               <span className="text-xs text-muted-foreground">Last updated {new Date(doc.updatedAt).toLocaleDateString()}</span>
             </div>

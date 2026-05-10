@@ -17,7 +17,7 @@ export async function chatCompletion(
 ): Promise<string> {
   if (!process.env.GROQ_API_KEY) {
     logger.warn("GROQ_API_KEY not set — returning mock response");
-    return "I'm MindForge's AI assistant. Please set GROQ_API_KEY to enable AI responses. Your documents are indexed and ready.";
+    return "I'm yukara's AI assistant. Please set GROQ_API_KEY to enable AI responses. Your documents are indexed and ready.";
   }
 
   const response = await groq.chat.completions.create({
@@ -37,7 +37,7 @@ export async function* chatCompletionStream(
 ): AsyncGenerator<string> {
   if (!process.env.GROQ_API_KEY) {
     const mock =
-      "I'm MindForge's AI assistant. Please set GROQ_API_KEY to enable AI responses. Your documents are indexed and ready.";
+      "I'm yukara's AI assistant. Please set GROQ_API_KEY to enable AI responses. Your documents are indexed and ready.";
     for (const char of mock) {
       yield char;
       await new Promise((r) => setTimeout(r, 8));

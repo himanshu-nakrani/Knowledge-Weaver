@@ -33,9 +33,11 @@ export function CommandPalette({ onSelectSession, onQuickNote }: CommandPaletteP
   const queryClient = useQueryClient();
   const { theme, toggle: toggleTheme } = useTheme();
 
-  const { data: docs = [] } = useListDocuments();
-  const { data: sessions = [] } = useListChatSessions();
+  const { data: docsData = [] } = useListDocuments();
+  const { data: sessionsData = [] } = useListChatSessions();
   const createSession = useCreateChatSession();
+  const docs = Array.isArray(docsData) ? docsData : [];
+  const sessions = Array.isArray(sessionsData) ? sessionsData : [];
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -59,7 +61,7 @@ export function CommandPalette({ onSelectSession, onQuickNote }: CommandPaletteP
         data: { title: `Session ${new Date().toLocaleTimeString()}` },
       });
       queryClient.invalidateQueries({ queryKey: getListChatSessionsQueryKey() });
-      navigate("/");
+      navigate("/workspace");
       onSelectSession?.(session.id);
     });
   };
@@ -72,7 +74,7 @@ export function CommandPalette({ onSelectSession, onQuickNote }: CommandPaletteP
 
         {/* Quick actions */}
         <CommandGroup heading="Actions">
-          <CommandItem onSelect={() => run(() => { navigate("/"); handleNewSession(); })}>
+          <CommandItem onSelect={() => run(() => { navigate("/workspace"); handleNewSession(); })}>
             <Plus className="h-4 w-4 mr-2 text-primary" />
             New chat session
           </CommandItem>
@@ -96,7 +98,7 @@ export function CommandPalette({ onSelectSession, onQuickNote }: CommandPaletteP
         {/* Navigation */}
         <CommandGroup heading="Navigate">
           {[
-            { label: "Workspace", href: "/", icon: Brain, shortcut: "⌘/" },
+            { label: "Workspace", href: "/workspace", icon: Brain, shortcut: "⌘/" },
             { label: "Document Library", href: "/documents", icon: FileText },
             { label: "Flashcard Decks", href: "/flashcards", icon: BookOpen },
             { label: "Knowledge Graph", href: "/knowledge-graph", icon: Network, shortcut: "⌘G" },
@@ -122,7 +124,7 @@ export function CommandPalette({ onSelectSession, onQuickNote }: CommandPaletteP
                   key={s.id}
                   onSelect={() =>
                     run(() => {
-                      navigate("/");
+                      navigate("/workspace");
                       onSelectSession?.(s.id);
                     })
                   }

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-const STORAGE_KEY = "mindforge:agent-runs";
+const STORAGE_KEY = "yukara:agent-runs";
 const MAX_SAVED_RUNS = 20;
 
 interface AgentStep {

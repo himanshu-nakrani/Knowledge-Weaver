@@ -1,6 +1,6 @@
-# MindForge — Personal Second Brain AI
+# yukara — Personal Knowledge AI
 
-MindForge is a full-stack personal knowledge base application with AI-powered retrieval, document management, and intelligent chat capabilities.
+yukara is a full-stack personal knowledge base application with AI-powered retrieval, document management, and intelligent chat capabilities.
 
 ## Features
 

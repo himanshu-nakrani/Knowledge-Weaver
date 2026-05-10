@@ -51,7 +51,7 @@ export function Ember() {
           <div className="w-8 h-8 rounded bg-amber-600 flex items-center justify-center text-white">
             <BookOpen size={18} />
           </div>
-          <span className="font-serif font-semibold text-xl tracking-wide text-amber-900">MindForge</span>
+          <span className="font-serif font-semibold text-xl tracking-wide text-amber-900">yukara</span>
         </div>
 
         <nav className="flex-1 space-y-1">

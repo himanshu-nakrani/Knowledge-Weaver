@@ -333,7 +333,7 @@ export function ChatArea({ sessionId }: ChatAreaProps) {
                             />
                           ))}
                         </div>
-                        <span className="text-xs text-muted-foreground">MindForge is thinking...</span>
+                        <span className="text-xs text-muted-foreground">yukara is thinking...</span>
                       </div>
                     ) : (
                       <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
