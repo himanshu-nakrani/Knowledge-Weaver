@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import {
   ArrowRight,
@@ -21,32 +22,74 @@ const workflow = [
     step: "01",
     title: "Collect the source material",
     copy: "Bring in PDFs, web pages, markdown notes, repositories, and quick thoughts without reshaping how you already work.",
+    detail: "Select sources once and yukara keeps document text, metadata, tags, and source links available to the rest of the workspace.",
   },
   {
     step: "02",
     title: "Ask across everything",
     copy: "yukara retrieves grounded passages, cites context, and keeps the conversation tied to your actual library.",
+    detail: "Questions resolve against the indexed library first, then answers surface the passages and signals that shaped the response.",
   },
   {
     step: "03",
     title: "Turn reading into memory",
     copy: "Generate flashcards, revisit weak concepts, and follow how ideas connect as your collection grows.",
+    detail: "Review cards, graph clusters, and analytics all update from the same knowledge layer, so the next study session has context.",
   },
 ];
 
 const capabilities = [
-  { icon: FileText, label: "Document library", detail: "PDFs, notes, links, and code live in one searchable workspace." },
-  { icon: MessageSquareText, label: "Grounded chat", detail: "Ask precise questions and keep answers attached to source context." },
-  { icon: BookOpen, label: "Flashcard generation", detail: "Convert important sections into review material with a few clicks." },
-  { icon: Network, label: "Knowledge graph", detail: "Reveal recurring entities, themes, and paths through your research." },
+  { icon: FileText, label: "Document library", detail: "PDFs, notes, links, and code live in one searchable workspace.", proof: "Filter sources by tag, type, collection, or freshness." },
+  { icon: MessageSquareText, label: "Grounded chat", detail: "Ask precise questions and keep answers attached to source context.", proof: "Every answer can expose citations and retrieval confidence." },
+  { icon: BookOpen, label: "Flashcard generation", detail: "Convert important sections into review material with a few clicks.", proof: "Generate focused decks from a document, session, or cluster." },
+  { icon: Network, label: "Knowledge graph", detail: "Reveal recurring entities, themes, and paths through your research.", proof: "Click a node to inspect source-backed connections." },
 ];
 
 const graphNodes = [
-  { label: "Retrieval", x: "15%", y: "30%" },
-  { label: "Notes", x: "40%", y: "16%" },
-  { label: "Graph", x: "70%", y: "26%" },
-  { label: "Review", x: "28%", y: "68%" },
-  { label: "Agent", x: "62%", y: "66%" },
+  { label: "Retrieval", x: "15%", y: "30%", note: "Source ranking is improving answer quality.", quality: "91%", docs: "34", links: "128" },
+  { label: "Notes", x: "40%", y: "16%", note: "Fresh notes are adding context to older PDFs.", quality: "87%", docs: "18", links: "74" },
+  { label: "Graph", x: "70%", y: "26%", note: "Entity overlap is revealing topic clusters.", quality: "94%", docs: "27", links: "156" },
+  { label: "Review", x: "28%", y: "68%", note: "Review cards are strongest around retrieval basics.", quality: "82%", docs: "12", links: "49" },
+  { label: "Agent", x: "62%", y: "66%", note: "Agent runs are using cited sources as checkpoints.", quality: "89%", docs: "22", links: "101" },
+];
+
+const previewSources = [
+  {
+    title: "Adaptive RAG notes",
+    type: "PDF",
+    tone: "bg-[#e5f3ef] text-[#23645d]",
+    icon: FileText,
+    question: "What changed across the retrieval pipeline?",
+    mobileQuestion: "What changed in retrieval?",
+    prompt: "Compare the chunking strategy, evaluation notes, and graph results from this week.",
+    answer: "The main shift is from broad semantic retrieval to a narrower source-ranked pass. Notes tagged evaluation now influence the final answer before graph expansion.",
+    citations: ["chunker.ts: adaptive windows", "eval notes: citation drift"],
+    metric: "8 sources cited",
+  },
+  {
+    title: "Repo architecture",
+    type: "GitHub",
+    tone: "bg-[#fff3db] text-[#8b5b12]",
+    icon: Github,
+    question: "Where does the agent read source context?",
+    mobileQuestion: "Where does the agent read context?",
+    prompt: "Trace the path from document chunks to the reasoning agent.",
+    answer: "The agent receives retrieved chunks after the chat route ranks source material. The strongest handoff is the shared API client and generated schemas.",
+    citations: ["routes/agent.ts: answer prompt", "api-client: generated hooks"],
+    metric: "5 files traced",
+  },
+  {
+    title: "Market research",
+    type: "URL",
+    tone: "bg-white text-[#65736f]",
+    icon: Globe2,
+    question: "Which themes keep repeating in research?",
+    mobileQuestion: "Which themes repeat?",
+    prompt: "Summarize recurring buyer concerns across linked articles and notes.",
+    answer: "The repeating themes are trust, answer traceability, and review momentum. Users care less about storing everything and more about finding the right thread again.",
+    citations: ["research: trust signals", "notes: review loop"],
+    metric: "12 themes found",
+  },
 ];
 
 function BrandMark({ className = "" }: { className?: string }) {
@@ -61,6 +104,10 @@ function BrandMark({ className = "" }: { className?: string }) {
 }
 
 function ProductPreview() {
+  const [activeSource, setActiveSource] = useState(0);
+  const source = previewSources[activeSource];
+  const SourceIcon = source.icon;
+
   return (
     <div className="landing-product-preview relative mx-auto w-full min-w-0 overflow-hidden">
       <div className="absolute -left-4 top-10 hidden h-24 w-24 rounded-full border border-[#d6ebe5] lg:block" />
@@ -83,33 +130,43 @@ function ProductPreview() {
         <div className="grid min-h-[430px] max-w-full grid-cols-1 lg:grid-cols-[230px_minmax(0,1fr)_250px]">
           <aside className="hidden border-r border-[#dfe9e5] bg-[#f4f8f6] p-4 lg:block">
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-[#65736f]">Library</p>
-            {[
-              ["Adaptive RAG notes", "PDF", "bg-[#e5f3ef] text-[#23645d]"],
-              ["Repo architecture", "GitHub", "bg-[#fff3db] text-[#8b5b12]"],
-              ["Market research", "URL", "bg-white text-[#65736f]"],
-            ].map(([title, type, tone]) => (
-              <div key={title} className="mb-2 rounded-lg border border-[#dfe9e5] bg-white p-3">
+            {previewSources.map((item, index) => {
+              const ItemIcon = item.icon;
+              const selected = index === activeSource;
+              return (
+              <button
+                key={item.title}
+                type="button"
+                onClick={() => setActiveSource(index)}
+                className={`mb-2 w-full rounded-lg border p-3 text-left transition ${
+                  selected ? "border-[#7fb6ac] bg-white shadow-sm" : "border-[#dfe9e5] bg-white hover:border-[#b8d3cc]"
+                }`}
+              >
                 <div className="mb-2 flex items-center gap-2">
-                  {type === "GitHub" ? <Github className="h-4 w-4 text-[#23645d]" /> : type === "URL" ? <Globe2 className="h-4 w-4 text-[#23645d]" /> : <FileText className="h-4 w-4 text-[#23645d]" />}
-                  <span className="truncate text-sm font-medium text-[#14211f]">{title}</span>
+                  <ItemIcon className="h-4 w-4 text-[#23645d]" />
+                  <span className="truncate text-sm font-medium text-[#14211f]">{item.title}</span>
                 </div>
-                <span className={`rounded-md px-2 py-1 text-xs font-medium ${tone}`}>{type}</span>
-              </div>
-            ))}
+                <span className={`rounded-md px-2 py-1 text-xs font-medium ${item.tone}`}>{item.type}</span>
+              </button>
+            );
+            })}
           </aside>
 
           <main className="min-w-0 bg-white p-4 sm:p-6">
             <div className="mb-5 flex min-w-0 items-start justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-[#23645d]">Research synthesis</p>
-                <h3 className="mt-1 break-words text-xl font-semibold tracking-tight text-[#14211f] sm:text-2xl">What changed across the retrieval pipeline?</h3>
+                <p className="flex items-center gap-2 text-sm font-semibold text-[#23645d]">
+                  <SourceIcon className="h-4 w-4" />
+                  Research synthesis
+                </p>
+                <h3 className="mt-1 break-words text-xl font-semibold tracking-tight text-[#14211f] sm:text-2xl">{source.question}</h3>
               </div>
-              <div className="hidden rounded-lg bg-[#f5faf8] px-3 py-2 text-xs font-medium text-[#65736f] sm:block">8 sources cited</div>
+              <div className="hidden rounded-lg bg-[#f5faf8] px-3 py-2 text-xs font-medium text-[#65736f] sm:block">{source.metric}</div>
             </div>
 
             <div className="min-w-0 space-y-3">
               <div className="max-w-full rounded-lg bg-[#eff7f4] p-4 text-sm leading-6 text-[#20312e] sm:max-w-[78%]">
-                Compare the chunking strategy, evaluation notes, and graph results from this week.
+                {source.prompt}
               </div>
               <div className="ml-auto max-w-full rounded-lg border border-[#dfe9e5] bg-white p-4 shadow-sm sm:max-w-[84%]">
                 <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#14211f]">
@@ -117,10 +174,10 @@ function ProductPreview() {
                   yukara answer
                 </div>
                 <p className="break-words text-sm leading-6 text-[#40514d]">
-                  The main shift is from broad semantic retrieval to a narrower source-ranked pass. Notes tagged evaluation now influence the final answer before graph expansion.
+                  {source.answer}
                 </p>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  {["chunker.ts: adaptive windows", "eval notes: citation drift"].map((item) => (
+                  {source.citations.map((item) => (
                     <div key={item} className="rounded-lg bg-[#f7faf9] px-3 py-2 text-xs font-medium text-[#65736f]">
                       {item}
                     </div>
@@ -165,7 +222,58 @@ function ProductPreview() {
   );
 }
 
+function MobileProductPreview() {
+  const [activeSource, setActiveSource] = useState(0);
+  const source = previewSources[activeSource];
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-[#d7e3df] bg-white shadow-[0_18px_50px_rgba(20,33,31,0.12)]">
+      <div className="flex items-center gap-2 border-b border-[#dfe9e5] px-4 py-3">
+        <div className="grid h-8 w-8 place-items-center rounded-lg bg-[#112f2c] text-white">
+          <GitBranch className="h-4 w-4" />
+        </div>
+        <span className="font-semibold text-[#14211f]">yukara</span>
+      </div>
+      <div className="flex gap-2 overflow-x-auto border-b border-[#dfe9e5] bg-[#f7faf9] p-3">
+        {previewSources.map((item, index) => (
+          <button
+            key={item.title}
+            type="button"
+            onClick={() => setActiveSource(index)}
+            className={`shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+              activeSource === index ? "border-[#7fb6ac] bg-white text-[#23645d]" : "border-[#dfe9e5] bg-white/70 text-[#65736f]"
+            }`}
+          >
+            {item.type}
+          </button>
+        ))}
+      </div>
+      <div className="space-y-4 p-4">
+        <div>
+          <p className="text-sm font-semibold text-[#23645d]">Research synthesis</p>
+          <h3 className="mt-1 text-xl font-semibold leading-tight text-[#14211f]">{source.mobileQuestion}</h3>
+        </div>
+        <div className="rounded-lg bg-[#eff7f4] p-4 text-sm leading-6 text-[#20312e]">{source.prompt}</div>
+        <div className="rounded-lg border border-[#dfe9e5] p-4">
+          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#14211f]">
+            <Sparkles className="h-4 w-4 text-[#c98516]" />
+            yukara answer
+          </div>
+          <p className="text-sm leading-6 text-[#40514d]">{source.answer}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Landing() {
+  const [activeWorkflow, setActiveWorkflow] = useState(0);
+  const [activeCapability, setActiveCapability] = useState(0);
+  const [activeGraph, setActiveGraph] = useState(0);
+  const activeCapabilityItem = capabilities[activeCapability];
+  const ActiveCapabilityIcon = activeCapabilityItem.icon;
+  const activeGraphNode = graphNodes[activeGraph];
+
   return (
     <div className="landing-page min-h-screen overflow-x-hidden bg-[#fbfdfc] text-[#14211f]">
       <header className="sticky top-0 z-40 max-w-[100vw] overflow-hidden border-b border-[#e2ebe8] bg-[#fbfdfc]/90 backdrop-blur">
@@ -223,7 +331,12 @@ export default function Landing() {
                 ))}
               </div>
             </div>
-            <ProductPreview />
+            <div className="sm:hidden">
+              <MobileProductPreview />
+            </div>
+            <div className="hidden sm:block">
+              <ProductPreview />
+            </div>
           </div>
         </section>
 
@@ -237,32 +350,59 @@ export default function Landing() {
                 </p>
               </div>
               <div className="grid gap-4 md:grid-cols-3">
-                {workflow.map((item) => (
-                  <article key={item.step} className="rounded-lg border border-[#dfe9e5] bg-[#fbfdfc] p-5">
+                {workflow.map((item, index) => (
+                  <button
+                    key={item.step}
+                    type="button"
+                    onClick={() => setActiveWorkflow(index)}
+                    className={`rounded-lg border p-5 text-left transition ${
+                      activeWorkflow === index ? "border-[#7fb6ac] bg-[#eef8f4] shadow-sm" : "border-[#dfe9e5] bg-[#fbfdfc] hover:border-[#b8d3cc]"
+                    }`}
+                  >
                     <div className="mb-8 text-sm font-semibold text-[#c98516]">{item.step}</div>
                     <h3 className="text-lg font-semibold text-[#14211f]">{item.title}</h3>
                     <p className="mt-3 text-sm leading-6 text-[#65736f]">{item.copy}</p>
-                  </article>
+                  </button>
                 ))}
               </div>
+            </div>
+            <div className="mt-6 rounded-lg border border-[#dfe9e5] bg-[#fbfdfc] p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#65736f]">Selected step</p>
+              <p className="mt-2 text-base font-semibold text-[#14211f]">{workflow[activeWorkflow].title}</p>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-[#65736f]">{workflow[activeWorkflow].detail}</p>
             </div>
           </div>
         </section>
 
         <section className="mx-auto max-w-7xl px-5 py-20">
-          <div className="grid gap-10 lg:grid-cols-2">
+          <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr]">
             <div>
               <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Everything your knowledge base needs to become useful.</h2>
+              <div className="mt-8 rounded-lg border border-[#dfe9e5] bg-white p-5 shadow-sm">
+                <div className="mb-5 grid h-10 w-10 place-items-center rounded-lg bg-[#eaf5f1] text-[#23645d]">
+                  <ActiveCapabilityIcon className="h-5 w-5" />
+                </div>
+                <h3 className="text-xl font-semibold text-[#14211f]">{activeCapabilityItem.label}</h3>
+                <p className="mt-3 text-sm leading-6 text-[#65736f]">{activeCapabilityItem.detail}</p>
+                <p className="mt-5 rounded-lg bg-[#f5faf8] p-3 text-sm font-medium text-[#23645d]">{activeCapabilityItem.proof}</p>
+              </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              {capabilities.map((item) => (
-                <article key={item.label} className="rounded-lg border border-[#dfe9e5] bg-white p-5">
+              {capabilities.map((item, index) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => setActiveCapability(index)}
+                  className={`rounded-lg border p-5 text-left transition ${
+                    activeCapability === index ? "border-[#7fb6ac] bg-[#eef8f4] shadow-sm" : "border-[#dfe9e5] bg-white hover:border-[#b8d3cc]"
+                  }`}
+                >
                   <div className="mb-5 grid h-10 w-10 place-items-center rounded-lg bg-[#eaf5f1] text-[#23645d]">
                     <item.icon className="h-5 w-5" />
                   </div>
                   <h3 className="font-semibold text-[#14211f]">{item.label}</h3>
                   <p className="mt-2 text-sm leading-6 text-[#65736f]">{item.detail}</p>
-                </article>
+                </button>
               ))}
             </div>
           </div>
@@ -296,21 +436,25 @@ export default function Landing() {
                     <path d="M166 72 C164 134, 148 164, 116 214" stroke="#75b8ac" strokeWidth="1.5" fill="none" opacity=".45" />
                     <path d="M292 86 C296 138, 292 166, 262 212" stroke="#75b8ac" strokeWidth="1.5" fill="none" opacity=".45" />
                   </svg>
-                  {graphNodes.map((node) => (
-                    <div
+                  {graphNodes.map((node, index) => (
+                    <button
                       key={node.label}
-                      className="absolute -translate-x-1/2 -translate-y-1/2 rounded-lg border border-white/15 bg-white px-3 py-2 text-xs font-semibold text-[#14211f] shadow-lg"
+                      type="button"
+                      onClick={() => setActiveGraph(index)}
+                      className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-lg border px-3 py-2 text-xs font-semibold shadow-lg transition ${
+                        activeGraph === index ? "border-[#f0bd54] bg-[#f0bd54] text-[#112f2c]" : "border-white/15 bg-white text-[#14211f] hover:bg-[#eaf5f1]"
+                      }`}
                       style={{ left: node.x, top: node.y }}
                     >
                       {node.label}
-                    </div>
+                    </button>
                   ))}
                 </div>
                 <div className="space-y-3">
                   {[
-                    [BarChart3, "Answer quality", "91%"],
-                    [Layers3, "Source coverage", "34 docs"],
-                    [Network, "Connected ideas", "128 links"],
+                    [BarChart3, "Answer quality", activeGraphNode.quality],
+                    [Layers3, "Source coverage", `${activeGraphNode.docs} docs`],
+                    [Network, "Connected ideas", `${activeGraphNode.links} links`],
                   ].map(([Icon, label, value]) => {
                     const MetricIcon = Icon as typeof BarChart3;
                     return (
@@ -321,6 +465,10 @@ export default function Landing() {
                       </div>
                     );
                   })}
+                  <div className="rounded-lg border border-white/12 bg-white/[0.08] p-4">
+                    <div className="text-sm font-semibold text-white">{activeGraphNode.label}</div>
+                    <p className="mt-2 text-sm leading-6 text-[#c6d8d3]">{activeGraphNode.note}</p>
+                  </div>
                 </div>
               </div>
             </div>

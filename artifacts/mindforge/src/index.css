@@ -299,6 +299,7 @@
 }
 
 .landing-product-preview {
+  width: calc(100vw - 2.5rem);
   max-width: min(64rem, calc(100vw - 2.5rem));
 }
 
@@ -318,5 +319,11 @@
 
   .landing-hero-copy {
     max-width: 42rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .landing-product-preview {
+    width: 100%;
   }
 }
